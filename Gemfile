@@ -6,6 +6,7 @@ gem 'rbnacl'
 
 group :development do
   gem 'bundler-audit'
+  gem 'rubocop', require: false
 end
 
 group :test do
