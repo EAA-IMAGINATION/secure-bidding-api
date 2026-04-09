@@ -28,7 +28,14 @@ mkdir -p app/db/store
 1. Run the application:
 
 ```bash
-rackup -p 9292
+bundle exec rackup -p 9292
+```
+
+If port 9292 is already in use, either stop the existing process or run on
+another port:
+
+```bash
+bundle exec rackup -p 9393
 ```
 
 ## API Routes
@@ -138,7 +145,7 @@ Response (200 OK):
     "550e8400-e29b-41d4-a716-446655440003"
   ]
 }
-```text
+```
 
 ## Testing
 
@@ -178,7 +185,8 @@ bundle exec ruby spec/bid_spec.rb
 
 ## Security Considerations
 
-See GitHub Issues for identified security vulnerabilities and planned improvements.
+See GitHub Issues for identified security vulnerabilities and planned
+improvements.
 
 ## License
 

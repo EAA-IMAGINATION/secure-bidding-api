@@ -3,8 +3,10 @@
 source 'https://rubygems.org'
 
 gem 'json'
+gem 'rackup'
 gem 'rbnacl'
 gem 'roda'
+gem 'webrick'
 
 group :development do
   gem 'bundler-audit'
