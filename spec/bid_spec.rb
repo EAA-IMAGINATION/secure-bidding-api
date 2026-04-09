@@ -1,6 +1,9 @@
+# frozen_string_literal: true
+
 require 'minitest/autorun'
 require_relative '../app/models/bid'
 
+# rubocop:disable Metrics/BlockLength
 describe 'SecureBidding::Bid' do
   before do
     # Clean up store before each test
@@ -77,3 +80,4 @@ describe 'SecureBidding::Bid' do
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

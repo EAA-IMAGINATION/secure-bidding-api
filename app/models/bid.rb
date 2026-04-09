@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 require 'json'
 require 'securerandom'
 
@@ -18,12 +20,14 @@ module SecureBidding
     end
 
     def to_json(*_args)
-      JSON.generate({
-        id: @id,
-        contractor: @contractor,
-        project_id: @project_id,
-        encrypted_bid: @encrypted_bid
-      })
+      JSON.generate(
+        {
+          id: @id,
+          contractor: @contractor,
+          project_id: @project_id,
+          encrypted_bid: @encrypted_bid
+        }
+      )
     end
 
     def save

@@ -1,8 +1,11 @@
+# frozen_string_literal: true
+
 require 'minitest/autorun'
 require 'rack/test'
 require 'json'
 require_relative '../app/controllers/app'
 
+# rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/bids' do
   include Rack::Test::Methods
 
@@ -20,7 +23,7 @@ describe 'API /api/v1/bids' do
       get '/'
 
       _(last_response.status).must_equal 200
-      
+
       response_body = JSON.parse(last_response.body)
       _(response_body['status']).must_equal 'ok'
       _(response_body['message']).must_include 'Secure Bidding API'
@@ -73,7 +76,7 @@ describe 'API /api/v1/bids' do
       get "/api/v1/bids/#{bid.id}"
 
       _(last_response.status).must_equal 200
-      
+
       response_body = JSON.parse(last_response.body)
       _(response_body['id']).must_equal bid.id
       _(response_body['contractor']).must_equal 'Acme Corp'
@@ -103,7 +106,7 @@ describe 'API /api/v1/bids' do
       get '/api/v1/bids'
 
       _(last_response.status).must_equal 200
-      
+
       response_body = JSON.parse(last_response.body)
       _(response_body['bid_ids']).must_be_kind_of Array
       _(response_body['bid_ids'].length).must_equal 2
@@ -115,7 +118,7 @@ describe 'API /api/v1/bids' do
       get '/api/v1/bids'
 
       _(last_response.status).must_equal 200
-      
+
       response_body = JSON.parse(last_response.body)
       _(response_body['bid_ids']).must_be_kind_of Array
       _(response_body['bid_ids']).must_be_empty
@@ -180,9 +183,10 @@ describe 'API /api/v1/bids' do
       get '/api/v1/bids/non-existent-id-12345'
 
       _(last_response.status).must_equal 404
-      
+
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_equal 'Bid not found'
     end
   end
 end
+# rubocop:enable Metrics/BlockLength

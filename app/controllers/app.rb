@@ -1,12 +1,16 @@
+# frozen_string_literal: true
+
 require 'roda'
 require 'json'
 require_relative '../models/bid'
 
 module SecureBidding
+  # Rack application for the secure bidding API.
   class App < Roda
     plugin :json
     plugin :halt
 
+    # rubocop:disable Metrics/BlockLength
     route do |r|
       # Root route - health check
       r.root do
@@ -70,5 +74,6 @@ module SecureBidding
         end
       end
     end
+    # rubocop:enable Metrics/BlockLength
   end
 end
