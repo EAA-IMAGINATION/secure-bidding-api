@@ -36,6 +36,9 @@ module SecureBidding
 
     # Class methods
     def self.find(id)
+      # Security: Validate UUID format to prevent directory traversal (Issue #10)
+      return nil unless id.to_s.match?(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+
       file_path = "app/db/store/#{id}.json"
       return nil unless File.exist?(file_path)
 
