@@ -33,6 +33,12 @@ mkdir -p app/db/store
 bundle exec rake db:migrate
 ```
 
+1. Seed account/secret demo data:
+
+```bash
+bundle exec rake db:seed
+```
+
 1. Optional database helpers:
 
 ```bash
@@ -202,6 +208,25 @@ Returns all accounts.
 
 Returns a single account.
 
+#### GET /api/v1/accounts/:id/secrets
+
+Returns all secret metadata owned by the account.
+
+Response (200 OK):
+
+```json
+{
+  "account_id": 1,
+  "secrets": [
+    {
+      "id": 1,
+      "account_id": 1,
+      "title": "db-password"
+    }
+  ]
+}
+```
+
 ### Create a Secret
 
 #### POST /api/v1/secrets
@@ -252,7 +277,7 @@ Response (200 OK):
 Run all tests:
 
 ```bash
-bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }'
+bundle exec rake spec
 ```
 
 Run specific test file:
@@ -263,6 +288,12 @@ bundle exec ruby spec/bid_spec.rb
 bundle exec ruby spec/accounts_api_spec.rb
 bundle exec ruby spec/secrets_api_spec.rb
 bundle exec ruby spec/secret_spec.rb
+```
+
+Set up test database once before running specs:
+
+```bash
+RACK_ENV=test bundle exec rake db:migrate
 ```
 
 ## Project Structure
@@ -280,6 +311,8 @@ bundle exec ruby spec/secret_spec.rb
 │       ├── store/           # JSON file storage
 │       ├── migrations/      # Sequel database migrations
 │       └── seeds/           # Seed data
+│           ├── accounts_seed.yml
+│           ├── secrets_seed.yml
 │           └── bids_seed.yml
 ├── spec/
 │   ├── api_spec.rb          # API endpoint tests

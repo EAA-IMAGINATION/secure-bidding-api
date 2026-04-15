@@ -70,4 +70,41 @@ describe 'API /api/v1/accounts' do
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'Account not found'
   end
+
+  it 'HAPPY: supports full cycle account -> secret -> account secrets list' do
+    post '/api/v1/accounts',
+         { username: 'flow-user', email: 'flow@example.com' }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+    _(last_response.status).must_equal 201
+    account_id = JSON.parse(last_response.body)['id']
+
+    post '/api/v1/secrets',
+         {
+           account_id: account_id,
+           title: 'flow-token',
+           plaintext: 'top-secret',
+           key: 'z' * 32
+         }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+    _(last_response.status).must_equal 201
+    secret_id = JSON.parse(last_response.body)['id']
+
+    get "/api/v1/accounts/#{account_id}/secrets"
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['account_id']).must_equal account_id
+    _(response_body['secrets']).must_be_kind_of Array
+    _(response_body['secrets'].length).must_equal 1
+    _(response_body['secrets'][0]['id']).must_equal secret_id
+    _(response_body['secrets'][0]['title']).must_equal 'flow-token'
+    _(response_body['secrets'][0]['account_id']).must_equal account_id
+  end
+
+  it 'SAD: returns 404 for unknown account id on /api/v1/accounts/:id/secrets' do
+    get '/api/v1/accounts/999999/secrets'
+
+    _(last_response.status).must_equal 404
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Account not found'
+  end
 end

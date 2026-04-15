@@ -59,16 +59,30 @@
 **Skill file:** `.github/skills/markdown-linting.md`
 
 ### 9. Commit Authorship Skill
-**Rule:** Do not add AI co-author trailers in commit messages.
+**Rule:** Commit only after tests pass, keep message short/meaningful, include required co-author trailer, and ask whether to push.
 
 **When to look at this skill:** Before creating or amending commits.
 
 **Skill file:** `.github/skills/commit-authorship.md`
 
-### 10. Repetitive Tasks Automation
+### 10. Delivery Checkpoint Skill
+**Rule:** Run tests, commit immediately after success, and ask about pushing to remote.
+
+**When to look at this skill:** At the end of each implementation task.
+
+**Skill file:** `.github/skills/delivery-checkpoint.md`
+
+### 11. Demo Alignment Skill
+**Rule:** Validate requirement coverage against demo branches and keep README aligned.
+
+**When to look at this skill:** When confirming assignment completeness.
+
+**Skill file:** `.github/skills/demo-alignment.md`
+
+### 12. Repetitive Tasks Automation
 **Action:** When asked to "Check Progress," run:
 ```bash
-bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }' && bundle-audit check
+bundle exec rake spec && bundle-audit check
 ```
 
 This ensures the project remains stable and secure.
@@ -82,7 +96,7 @@ npx markdownlint "**/*.md"
 
 Run all tests:
 ```bash
-bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }'
+bundle exec rake spec
 ```
 
 Run API tests only:
@@ -117,7 +131,7 @@ This is a secure bidding API built with Ruby and Roda. The system now uses both 
 ### Security Features
 - RbNaCl (libsodium) is included for cryptographic operations
 - UUIDs generated via `SecureRandom.uuid` for bid identifiers
-- 10 security issues documented in SECURITY.md and GitHub Issues
+- 10 security issues documented in GitHub Issues
 
 ## Key Conventions
 
@@ -168,14 +182,8 @@ Test gems (`:test` group):
 - `rack-test` - HTTP testing helpers
 - `minitest` - Test framework
 
-## Current Status
+## Current Focus
 
-**Week 1: COMPLETE** ✅
-- 14 tests passing (54 assertions)
-- 4 API routes implemented
-- 10 security issues documented and triaged on GitHub
-- Repository: https://github.com/EAA-IMAGINATION/secure-bidding-api
-
-**Week 2: ACTIVE** 🚧
-- Branch: `1-db-orm`
-- Focus: Sequel ORM migrations, `Account` + `Secret` models, encrypted secret API routes, route-first tests, and DB console workflow
+- Maintain assignment-aligned ORM implementation (`Account` + `Secret`)
+- Keep route tests complete for HAPPY/SAD paths
+- Keep README and skills synchronized with implemented behavior

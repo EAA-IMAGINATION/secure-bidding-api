@@ -116,13 +116,29 @@ module SecureBidding
 
             # GET /api/v1/accounts/:id - single account
             r.on Integer do |id|
-              r.get do
+              r.get true do
                 account = Account[id]
                 if account
                   { id: account.id, username: account.username, email: account.email }
                 else
                   response.status = 404
                   { error: 'Account not found' }
+                end
+              end
+
+              # GET /api/v1/accounts/:id/secrets - list secrets for a single account
+              r.on 'secrets' do
+                r.get true do
+                  account = Account[id]
+                  if account
+                    secrets = account.secrets_dataset.order(:id).all.map do |secret|
+                      { id: secret.id, account_id: secret.account_id, title: secret.title }
+                    end
+                    { account_id: account.id, secrets: secrets }
+                  else
+                    response.status = 404
+                    { error: 'Account not found' }
+                  end
                 end
               end
             end

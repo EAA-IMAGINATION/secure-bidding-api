@@ -1,0 +1,6 @@
+---
+accounts:
+  - username: client-alpha
+    email: client-alpha@example.com
+  - username: client-beta
+    email: client-beta@example.com
