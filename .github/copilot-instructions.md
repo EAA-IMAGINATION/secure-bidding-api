@@ -82,8 +82,8 @@ behavior.
 
 ### 9. Commit Authorship Skill
 
-**Rule:** Commit only after tests pass, keep message short/meaningful, include
-required co-author trailer, and ask whether to push.
+**Rule:** Commit only after tests pass, keep message short/meaningful, never add
+an AI co-author trailer, and ask whether to push.
 
 **When to look at this skill:** Before creating or amending commits.
 
@@ -91,8 +91,8 @@ required co-author trailer, and ask whether to push.
 
 ### 10. Delivery Checkpoint Skill
 
-**Rule:** Run tests, commit immediately after success, and ask about pushing to
-remote.
+**Rule:** Run tests, prepare commit immediately after success, have developer
+execute final commit command, and ask about pushing to remote.
 
 **When to look at this skill:** At the end of each implementation task.
 
