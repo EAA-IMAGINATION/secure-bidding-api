@@ -3,7 +3,9 @@
 ## Project Skills and Rules
 
 ### 1. Feature Branch Workflow
-**Rule:** Never work directly from `main`/`master`. Always create a branch named for the feature before implementation.
+**Rule:** Never work directly from `main`/`master`.
+Before any edits, check the current branch; if it is `main`/`master`,
+switch to a feature branch first.
 
 **When to look at this skill:** At the start of every new feature.
 
