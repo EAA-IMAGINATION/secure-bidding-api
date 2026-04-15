@@ -1,5 +1,12 @@
 # Copilot Instructions: Secure Bidding API
 
+## Weekly Scope Gate (Hard Rule)
+
+1. Never work ahead of the professor's weekly requirements.
+2. Keep future-facing skills available as references, but only apply them when that week's spec explicitly requires them.
+3. At the start of each task, map requirements to the smallest relevant skill subset.
+4. If a requested implementation is outside current week scope, defer it and document it as future roadmap work only.
+
 ## Project Skills and Rules
 
 ### 1. Feature Branch Workflow
@@ -81,7 +88,22 @@ switch to a feature branch first.
 
 **Skill file:** `.github/skills/demo-alignment.md`
 
-### 12. Repetitive Tasks Automation
+### 12. Weekly Scope Gating Skill
+**Rule:** Select skills only from the current week's requirements and defer all out-of-scope implementation.
+
+**When to look at this skill:** At the beginning of every weekly assignment task.
+
+**Skill file:** `.github/skills/weekly-scope-gating.md`
+
+### 13. Future Capability Skills (Reference Only)
+These are intentionally saved for later project phases and should only be used when weekly specs require them:
+
+- `.github/skills/crypto-bid-envelope.md`
+- `.github/skills/payment-gate-verification.md`
+- `.github/skills/atomic-reveal-timer.md`
+- `.github/skills/integrity-hash-publish.md`
+
+### 14. Repetitive Tasks Automation
 **Action:** When asked to "Check Progress," run:
 ```bash
 bundle exec rake spec && bundle-audit check
