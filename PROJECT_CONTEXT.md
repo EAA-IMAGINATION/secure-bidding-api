@@ -2,178 +2,82 @@
 
 ## Overview
 
-A secure bidding platform API for students and freelancers to submit
-project proposals without fear of bid leaking or price-fixing. Features
-encrypted bid submission using NaCl cryptography and planned atomic reveal
-mechanism.
+Secure Bidding API is a Ruby/Roda service for encrypted bid submission with
+ongoing security hardening and ORM-backed data for account-owned secrets.
 
-## Project Vision
+## Current Implementation Status
 
-**Core Features (Planned):**
+### Completed
 
-1. **Encrypted Bid Submission** - Contractors encrypt bids with client's
-   public key
-2. **Atomic Reveal & Integrity Timer** - Cryptographic lock prevents early
-   bid access; public hash proves no late entries
-3. **Payment Integration** - PayPal/Stripe verification for viewing fees and
-   budget checks
-4. **Fair & Transparent Process** - Blockchain/ledger proof of fairness
+- Bid API (legacy file-backed):
+  - `GET /`
+  - `GET /api/v1/bids`
+  - `GET /api/v1/bids/:id`
+  - `POST /api/v1/bids`
+- ORM-backed account and secret resources:
+  - `GET /api/v1/accounts`
+  - `GET /api/v1/accounts/:id`
+  - `POST /api/v1/accounts`
+  - `GET /api/v1/accounts/:id/secrets`
+  - `GET /api/v1/secrets`
+  - `GET /api/v1/secrets/:id`
+  - `POST /api/v1/secrets`
+- Sequel + SQLite environment setup in `config/environments.rb`
+- Migrations in `app/db/migrations/`:
+  - `001_create_accounts.rb`
+  - `002_create_secrets.rb`
+  - `003_normalize_secret_foreign_key.rb`
+- Seed workflow:
+  - `app/db/seeds/accounts_seed.yml`
+  - `app/db/seeds/secrets_seed.yml`
+  - `bundle exec rake db:seed`
+- Test suite:
+  - `bundle exec rake spec`
+  - Current baseline: 29 runs, 106 assertions, 0 failures
 
-## Current Status
+### Not Yet Implemented
 
-### ✅ Week 1: COMPLETE (100%)
+- Authentication and authorization
+- HTTPS enforcement and broader transport hardening
+- Atomic reveal mechanism and payment verification flows
 
-**Completed:** April 8, 2026
+## Architecture
 
-**Deliverables:**
+- **Framework:** Roda
+- **ORM/DB:** Sequel + SQLite
+- **Crypto:** RbNaCl
+- **Tests:** Minitest + Rack::Test
+- **Storage model:** Hybrid
+  - Bids remain file-based in `app/db/store/`
+  - Accounts/secrets are relational in SQLite
 
-- ✅ Basic domain resource entity (Bid model)
-  - Instance methods: `#initialize`, `#new_id`, `#to_json`, `#save`
-  - Class methods: `::find(id)`, `::all`
-- ✅ Web API with Roda
-  - `GET /` - Health check
-  - `POST /api/v1/bids` - Create bid (returns 201)
-  - `GET /api/v1/bids/:id` - Get bid details
-  - `GET /api/v1/bids` - List all bid IDs
-- ✅ Tests: 14 tests, 54 assertions, 0 failures
-  - HAPPY tests: root, POST, GET single, GET all
-  - SAD tests: 404 for missing, 400 for invalid input
-- ✅ Project files
-  - README.md with full API documentation
-  - LICENSE (MIT)
-  - config.ru
-  - .gitignore
-  - Seed data (bids_seed.yml)
-- ✅ Security analysis
-  - bundler-audit: 0 vulnerabilities in dependencies
-  - SECURITY.md: 10 documented vulnerabilities
-  - 10 GitHub Issues created and triaged
+## Development Workflow Rules
 
-**Repository:** <https://github.com/EAA-IMAGINATION/secure-bidding-api>
+1. Never implement on `main`/`master`.
+2. Check current branch before edits (`git branch --show-current`).
+3. If on `main`/`master`, switch to a feature branch first.
+4. Run relevant tests before commit.
+5. Use short meaningful commit messages.
+6. Ask before pushing to remote.
 
-**Status:** API is live (locally), all tests passing, ready for team collaboration
-
-### 🔒 Security Issues (GitHub Issues #1-#10)
-
-**CRITICAL** (Must fix before production):
-
-- #1 🔒 No Authentication or Authorization
-- #4 🔒 No HTTPS Enforcement
-
-**HIGH** (Core features + security):
-
-- #2 ⚠️ Missing Input Validation
-- #3 ⚠️ No Encryption at Rest
-- #8 ⚠️ No Atomic Reveal Mechanism (Core Feature)
-- #9 ⚠️ No Payment Verification Integration (Core Feature)
-
-**MEDIUM** (Important improvements):
-
-- #5 ⚠️ No Rate Limiting
-- #6 ⚠️ No Audit Logging
-- #10 ⚠️ Directory Traversal Risk
-
-**LOW** (Nice to have):
-
-- #7 ℹ️ Weak ID Generation Predictability
-
-## Technology Stack
-
-**Backend:**
-
-- Ruby 3.x
-- Roda (web framework)
-- RbNaCl (cryptography)
-- Minitest (testing)
-
-**Storage:**
-
-- File-based JSON (current)
-- Database (planned for Week 2+)
-
-**Deployment:**
-
-- GitHub: EAA-IMAGINATION/secure-bidding-api
-- Production: TBD
-
-## Team Structure
-
-- **Organization:** EAA-IMAGINATION
-- **Repository:** secure-bidding-api
-- **Members:** TBD (invite team members)
-
-## Development Workflow
-
-**TDD Approach (Red-Green-Refactor):**
-
-1. Write failing test in `spec/`
-2. Write minimal code to pass
-3. Refactor while keeping tests green
-
-**Code Organization:**
-
-- Models: `app/models/` (data logic, file storage)
-- Controllers: `app/controllers/app.rb` (Roda routes, JSON responses)
-- Tests: `spec/` (Minitest with spec DSL)
-
-**Quality Checks:**
+## Core Commands
 
 ```bash
-# Run all tests
-bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }'
-
-# Check for security vulnerabilities
-bundle-audit check --update
+bundle install
+bundle exec rake db:migrate
+bundle exec rake db:seed
+RACK_ENV=test bundle exec rake db:migrate
+bundle exec rake spec
+bundle exec rake console
 ```
 
-## Next Steps (Week 2 and Beyond)
+## References
 
-**Immediate Priorities:**
-
-1. Fix CRITICAL security issues (#1, #4)
-2. Implement core features (#8 Atomic Reveal, #9 Payments)
-3. Add database integration (replace file storage)
-4. Create additional models (Client, Project)
-
-**Future Enhancements:**
-
-- User authentication and authorization
-- HTTPS deployment
-- Rate limiting and audit logging
-- Blockchain integration for transparency
-- Payment gateway integration
-
-## Project Guidelines
-
-### Security-First Development
-
-- Every new route must consider the 10 identified security issues
-- Always validate input (format, length, type)
-- Use proper HTTP status codes
-- Use RbNaCl for encryption
-
-### Maintain MVC Separation
-
-- Models handle data logic
-- Controllers handle HTTP routing
-- No business logic in controllers
-- No HTTP concerns in models
-
-### Testing Requirements
-
-- Write tests before implementation (TDD)
-- Test both HAPPY and SAD paths
-- Clean up test data in `before` blocks
-- Aim for high test coverage
-
-## Resources
-
-- **Repository:** <https://github.com/EAA-IMAGINATION/secure-bidding-api>
-- **Issues:** <https://github.com/EAA-IMAGINATION/secure-bidding-api/issues>
-- **Documentation:** README.md, SECURITY.md
-- **Copilot Instructions:** .github/copilot-instructions.md
+- Repo: <https://github.com/EAA-IMAGINATION/secure-bidding-api>
+- Issues: <https://github.com/EAA-IMAGINATION/secure-bidding-api/issues>
+- Project instructions: `.github/copilot-instructions.md`
 
 ---
 
-**Last Updated:** April 8, 2026  
-**Status:** Week 1 Complete, Ready for Week 2
+**Last Updated:** 2026-04-15  
+**Status:** ORM + seed workflow implemented; security roadmap still active
