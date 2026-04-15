@@ -168,11 +168,46 @@ Response (200 OK):
 }
 ```
 
+### Accounts Routes
+
+#### POST /api/v1/accounts
+
+Creates a new account.
+
+Request:
+
+```bash
+curl -X POST http://localhost:9292/api/v1/accounts \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "alice",
+    "email": "alice@example.com"
+  }'
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 1,
+  "status": "created"
+}
+```
+
+#### GET /api/v1/accounts
+
+Returns all accounts.
+
+#### GET /api/v1/accounts/:id
+
+Returns a single account.
+
 ### Create a Secret
 
 #### POST /api/v1/secrets
 
 Creates a new encrypted secret using a 32-byte symmetric key.
+An account must exist first, and `account_id` must reference that account.
 
 Request:
 
@@ -211,20 +246,6 @@ Response (200 OK):
   "title": "db-password"
 }
 ```
-
-### Accounts Routes
-
-#### POST /api/v1/accounts
-
-Creates a new account.
-
-#### GET /api/v1/accounts
-
-Returns all accounts.
-
-#### GET /api/v1/accounts/:id
-
-Returns a single account.
 
 ## Testing
 
