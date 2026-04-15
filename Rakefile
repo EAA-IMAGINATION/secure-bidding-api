@@ -66,6 +66,21 @@ namespace :db do
     end
   end
 
+  desc 'Clear app data in current environment (accounts, secrets, bid files)'
+  task :clear do
+    require_relative 'app/require_app'
+
+    env = SecureBidding::Database.environment
+    SecureBidding::Database.connect!(env)
+    SecureBidding::Database.migrate!(env)
+
+    SecureBidding::Secret.dataset.delete
+    SecureBidding::Account.dataset.delete
+    Dir.glob(File.expand_path('app/db/store/*.json', __dir__)).each { |file| File.delete(file) }
+
+    puts "Cleared app data in #{env}"
+  end
+
   desc 'Seed the current environment database with account and secret data'
   task :seed do
     require_relative 'app/require_app'
