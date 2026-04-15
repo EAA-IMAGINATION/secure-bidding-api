@@ -64,7 +64,8 @@ ongoing security hardening and ORM-backed data for account-owned secrets.
 2. Check current branch before edits (`git branch --show-current`).
 3. If on `main`/`master`, switch to a feature branch first.
 4. Never implement ahead of current weekly professor requirements.
-5. Keep future-phase skills available, but use them only when weekly specs require them.
+5. Keep future-phase skills available, but use them only when weekly specs
+   require them.
 6. Run relevant tests before commit.
 7. Use short meaningful commit messages.
 8. Ask before pushing to remote.

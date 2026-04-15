@@ -107,6 +107,16 @@ RACK_ENV=test bundle exec rake db:migrate
 bundle exec rake spec
 ```
 
+## Enforce Markdown linting before commit
+
+Install the repository pre-commit hook once:
+
+```bash
+git config core.hooksPath .githooks
+```
+
+The hook blocks commits when Markdown lint errors exist.
+
 ## Cleanup / Reset
 
 Clear all app data in current environment (accounts, secrets, bid files):
