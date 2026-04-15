@@ -58,7 +58,14 @@
 
 **Skill file:** `.github/skills/markdown-linting.md`
 
-### 9. Repetitive Tasks Automation
+### 9. Commit Authorship Skill
+**Rule:** Do not add AI co-author trailers in commit messages.
+
+**When to look at this skill:** Before creating or amending commits.
+
+**Skill file:** `.github/skills/commit-authorship.md`
+
+### 10. Repetitive Tasks Automation
 **Action:** When asked to "Check Progress," run:
 ```bash
 bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }' && bundle-audit check
