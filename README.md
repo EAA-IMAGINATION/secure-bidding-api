@@ -8,7 +8,9 @@ public key.
 ## Features
 
 - **Encrypted Bid Submission**: All bids are encrypted using NaCl cryptography
-- **Secure Storage**: File-based JSON storage for bid data
+- **Secure Storage**: Sequel + SQLite support for encrypted secrets data
+- **Database Migrations**: Rake task for `development.db` and `test.db`
+- **Account + Secret Resources**: Table-backed account and secret routes
 - **RESTful API**: Clean, simple API endpoints for bid management
 
 ## Setup
@@ -23,6 +25,25 @@ bundle install
 
 ```bash
 mkdir -p app/db/store
+```
+
+1. Run database migrations:
+
+```bash
+bundle exec rake db:migrate
+```
+
+1. Optional database helpers:
+
+```bash
+bundle exec rake db:reset
+bundle exec rake db:version
+```
+
+1. Open a preloaded console:
+
+```bash
+bundle exec rake console
 ```
 
 1. Run the application:
@@ -147,6 +168,64 @@ Response (200 OK):
 }
 ```
 
+### Create a Secret
+
+#### POST /api/v1/secrets
+
+Creates a new encrypted secret using a 32-byte symmetric key.
+
+Request:
+
+```bash
+curl -X POST http://localhost:9292/api/v1/secrets \
+  -H "Content-Type: application/json" \
+  -d '{
+    "account_id": 1,
+    "title": "db-password",
+    "plaintext": "super-secret-value",
+    "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  }'
+```
+
+Response (201 Created):
+
+```json
+{
+  "id": 1,
+  "status": "created"
+}
+```
+
+### Get Secret Metadata
+
+#### GET /api/v1/secrets/:id
+
+Returns secret metadata without exposing encrypted payload bytes.
+
+Response (200 OK):
+
+```json
+{
+  "id": 1,
+  "account_id": 1,
+  "title": "db-password"
+}
+```
+
+### Accounts Routes
+
+#### POST /api/v1/accounts
+
+Creates a new account.
+
+#### GET /api/v1/accounts
+
+Returns all accounts.
+
+#### GET /api/v1/accounts/:id
+
+Returns a single account.
+
 ## Testing
 
 Run all tests:
@@ -160,6 +239,9 @@ Run specific test file:
 ```bash
 bundle exec ruby spec/api_spec.rb
 bundle exec ruby spec/bid_spec.rb
+bundle exec ruby spec/accounts_api_spec.rb
+bundle exec ruby spec/secrets_api_spec.rb
+bundle exec ruby spec/secret_spec.rb
 ```
 
 ## Project Structure
@@ -170,15 +252,21 @@ bundle exec ruby spec/bid_spec.rb
 │   ├── controllers/
 │   │   └── app.rb           # Roda API routes
 │   ├── models/
-│   │   └── bid.rb           # Bid model
+│   │   ├── bid.rb           # Bid model
+│   │   ├── account.rb       # Sequel account model
+│   │   └── secret.rb        # Sequel secret model + encryption
 │   └── db/
 │       ├── store/           # JSON file storage
+│       ├── migrations/      # Sequel database migrations
 │       └── seeds/           # Seed data
 │           └── bids_seed.yml
 ├── spec/
 │   ├── api_spec.rb          # API endpoint tests
-│   └── bid_spec.rb          # Bid model tests
+│   ├── bid_spec.rb          # Bid model tests
+│   ├── secret_spec.rb       # Secret model tests
+│   └── secrets_api_spec.rb  # Secret API tests
 ├── config.ru                # Rack configuration
+├── config/environments.rb   # Environment-aware DB config
 ├── Gemfile                  # Ruby dependencies
 └── README.md
 ```

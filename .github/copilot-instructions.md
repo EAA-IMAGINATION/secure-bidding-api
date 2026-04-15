@@ -2,52 +2,74 @@
 
 ## Project Skills and Rules
 
-### 1. TDD Mastery Skill
-**Rule:** Always use Red-Green-Refactor.
+### 1. Feature Branch Workflow
+**Rule:** Never work directly from `main`/`master`. Always create a branch named for the feature before implementation.
 
-**Action:** Before writing any application logic, create a failing test in `spec/api_spec.rb`. Only after the test fails, write the minimum code in `app/` to pass it.
+**When to look at this skill:** At the start of every new feature.
 
-**Workflow:**
-1. 🔴 RED: Write a failing test
-2. 🟢 GREEN: Write minimal code to pass the test
-3. 🔵 REFACTOR: Clean up code while keeping tests green
+**Skill file:** `.github/skills/feature-branch-workflow.md`
 
-### 2. MVC Architecture Skill
+### 2. TDD Mastery Skill
+**Rule:** Always use Red-Green-Refactor and start with failing tests.
+
+**When to look at this skill:** Before writing application logic for routes, models, or migrations.
+
+**Skill file:** `.github/skills/tdd-mastery.md`
+
+### 3. MVC Architecture Skill
 **Rule:** Maintain strict separation of concerns.
 
-**Action:** 
-- **Models** in `app/models/` handle data logic and file storage
-- **Controllers** in `app/controllers/app.rb` handle Roda routing and JSON responses
-- **Views** are JSON responses (no HTML templates)
+**When to look at this skill:** When modifying route handlers and model logic together.
 
-**Never mix concerns:**
-- Models should not know about HTTP
-- Controllers should not contain business logic
-- Keep file I/O in models
+**Skill file:** `.github/skills/mvc-architecture.md`
 
-### 3. Security-First Skill
+### 4. Security-First Skill
 **Rule:** Every new route must consider the 10 identified security issues.
 
-**Action:** 
-- Ensure input validation on all parameters
-- Use proper HTTP status codes (201, 400, 404, etc.)
-- Use RbNaCl for sensitive data encryption
-- Check SECURITY.md before adding new features
+**When to look at this skill:** Before persisting or returning sensitive data.
 
-**Security Checklist for New Routes:**
-- [ ] Input validation (format, length, type)
-- [ ] Authentication required? (when implemented)
-- [ ] Authorization check? (when implemented)
-- [ ] Audit logging? (when implemented)
-- [ ] Rate limiting consideration?
+**Skill file:** `.github/skills/security-first.md`
 
-### 4. Repetitive Tasks Automation
+### 5. Sequel DB Setup Skill
+**Rule:** Keep migrations and environment DB config aligned with Sequel conventions.
+
+**When to look at this skill:** Before changing schema, migrations, or DB configuration.
+
+**Skill file:** `.github/skills/sequel-db-setup.md`
+
+### 6. Console Data Inspection Skill
+**Rule:** Use preloaded pry console for DB exploration and sanity checks.
+
+**When to look at this skill:** When manually validating create/read/update/delete behavior.
+
+**Skill file:** `.github/skills/console-data-inspection.md`
+
+### 7. API Route Testing Skill
+**Rule:** Test routes first with happy/sad paths and environment expectations.
+
+**When to look at this skill:** Before adding new GET/POST routes.
+
+**Skill file:** `.github/skills/api-route-testing.md`
+
+### 8. Markdown Linting Skill
+**Rule:** After editing any `.md` file, always run markdown linting before finishing.
+
+**When to look at this skill:** Every time a Markdown file is added or modified.
+
+**Skill file:** `.github/skills/markdown-linting.md`
+
+### 9. Repetitive Tasks Automation
 **Action:** When asked to "Check Progress," run:
 ```bash
-bundle exec ruby spec/api_spec.rb && bundle-audit check
+bundle exec ruby -I. -e 'Dir.glob("spec/*_spec.rb").sort.each { |f| require f }' && bundle-audit check
 ```
 
 This ensures the project remains stable and secure.
+
+**Recurring Markdown task:** After any `.md` edit, run:
+```bash
+npx markdownlint "**/*.md"
+```
 
 ## Testing
 
@@ -70,18 +92,20 @@ Tests use Minitest with the spec DSL. Test files are located in `spec/` and foll
 
 ## Architecture
 
-This is a secure bidding API built with Ruby and Roda. The system is designed to handle encrypted bids with the following structure:
+This is a secure bidding API built with Ruby and Roda. The system now uses both file-based and Sequel/SQLite persistence.
 
 ### Data Storage
-- **File-based persistence**: Uses JSON files stored in `app/db/store/`
-- **File naming**: Each bid is stored as `{uuid}.json` where the UUID is the bid's ID
-- **No database**: Currently uses filesystem storage; database integration is planned
+- **Legacy file persistence**: Bid JSON files stored in `app/db/store/`
+- **Sequel + SQLite persistence**: `app/db/development.db` and `app/db/test.db`
+- **Migrations**: Schema changes are in `app/db/migrations/`
+- **Environment config**: `config/environments.rb` controls environment-aware DB URL
 
 ### Module Structure
 - All classes are namespaced under `SecureBidding` module
-- **Models** (`app/models/`): Domain objects (e.g., `Bid`)
+- **Models** (`app/models/`): Domain objects (e.g., `Bid`, `Account`, `Secret`)
 - **Controllers** (`app/controllers/`): HTTP request handlers (Roda-based API)
-- **DB/Store** (`app/db/store/`): File-based storage location
+- **DB** (`app/db/`): SQLite files + Sequel migrations
+- **DB/Store** (`app/db/store/`): Legacy file-based bid storage
 
 ### Security Features
 - RbNaCl (libsodium) is included for cryptographic operations
@@ -92,12 +116,14 @@ This is a secure bidding API built with Ruby and Roda. The system is designed to
 
 ### Model Patterns
 - Models use keyword arguments in initializers (e.g., `Bid.new(contractor: 'ABC', project_id: '123', encrypted_bid: 'data')`)
-- All models implement:
+- Bid model (legacy storage) implements:
   - `#save` to persist to `app/db/store/{id}.json`
   - `#to_json` for serialization
   - `#new_id` for UUID generation
   - `::find(id)` class method to retrieve by ID
   - `::all` class method to list all IDs
+- Sequel models use table-backed associations (`Account` has many `Secret`, `Secret` belongs to `Account`)
+- Follow naming convention: plural tables and singular foreign keys (e.g., `account_id`)
 
 ### Code Organization
 - Require statements use `require_relative` for internal files
@@ -107,9 +133,10 @@ This is a secure bidding API built with Ruby and Roda. The system is designed to
 ### Testing Patterns
 - Use Minitest spec syntax: `describe` blocks with `it` statements
 - Assertions use `_()` wrapper: `_(value).must_equal expected`
-- Tests check file system state: `Dir.glob('app/db/store/*.json')`
-- Always clean up test data in `before` blocks
+- Always clean up test data in `before` blocks (DB tables and file store as applicable)
 - Write HAPPY and SAD path tests for all routes
+- Include route tests for list, single-fetch, and create operations for each resource
+- Include a happy-path test that app works without `DATABASE_URL` in environment
 
 ### API Response Patterns
 - Success responses return JSON with 200/201 status
@@ -122,9 +149,13 @@ Core gems:
 - `roda` - Web framework
 - `json` - JSON serialization
 - `rbnacl` - NaCl cryptography library
+- `sequel` - ORM and migrations
+- `sqlite3` - SQLite adapter
 
 Development gems:
 - `bundler-audit` - Security vulnerability scanning
+- `pry` - Interactive console
+- `hirb` - Tabular console output
 
 Test gems (`:test` group):
 - `rack-test` - HTTP testing helpers
@@ -137,3 +168,7 @@ Test gems (`:test` group):
 - 4 API routes implemented
 - 10 security issues documented and triaged on GitHub
 - Repository: https://github.com/EAA-IMAGINATION/secure-bidding-api
+
+**Week 2: ACTIVE** 🚧
+- Branch: `1-db-orm`
+- Focus: Sequel ORM migrations, `Account` + `Secret` models, encrypted secret API routes, route-first tests, and DB console workflow

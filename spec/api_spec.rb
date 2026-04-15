@@ -1,9 +1,11 @@
 # frozen_string_literal: true
 
+ENV['RACK_ENV'] = 'test'
+
 require 'minitest/autorun'
 require 'rack/test'
 require 'json'
-require_relative '../app/controllers/app'
+require_relative '../app/require_app'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/bids' do
@@ -15,6 +17,9 @@ describe 'API /api/v1/bids' do
 
   before do
     # Clean up store before each test
+    SecureBidding::Database.migrate!
+    SecureBidding::Secret.dataset.delete
+    SecureBidding::Account.dataset.delete
     Dir.glob('app/db/store/*.json').each { |f| File.delete(f) }
   end
 
@@ -27,6 +32,15 @@ describe 'API /api/v1/bids' do
       response_body = JSON.parse(last_response.body)
       _(response_body['status']).must_equal 'ok'
       _(response_body['message']).must_include 'Secure Bidding API'
+    end
+
+    it 'does not require DATABASE_URL environment variable' do
+      ENV.delete('DATABASE_URL')
+
+      get '/'
+
+      _(last_response.status).must_equal 200
+      _(ENV['DATABASE_URL']).must_be_nil
     end
   end
 
