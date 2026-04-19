@@ -11,6 +11,7 @@ Run from the repository root:
 
 ```bash
 bundle install
+cp config/example-secrets.yml config/secrets.yml
 mkdir -p app/db/store
 bundle exec rake db:migrate
 bundle exec rake db:seed
@@ -56,7 +57,7 @@ curl -X POST http://localhost:9292/api/v1/accounts \
 Expected:
 
 ```json
-{"id":3,"status":"created"}
+{"id":"UUID","status":"created"}
 ```
 
 ### 4. Create a secret for that account
@@ -66,13 +67,13 @@ Replace `ACCOUNT_ID` with the `id` returned above.
 ```bash
 curl -X POST http://localhost:9292/api/v1/secrets \
   -H "Content-Type: application/json" \
-  -d '{"account_id":ACCOUNT_ID,"title":"demo-token","plaintext":"top-secret","key":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'
+  -d '{"account_id":"ACCOUNT_ID","title":"demo-token","plaintext":"top-secret"}'
 ```
 
 Expected:
 
 ```json
-{"id":3,"status":"created"}
+{"id":"UUID","status":"created"}
 ```
 
 ### 5. Verify account-owned secrets flow

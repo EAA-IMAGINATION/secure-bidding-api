@@ -120,10 +120,10 @@ namespace :db do
       raise "Seed secret '#{entry['title']}' references an unknown account" if account_id.nil?
 
       title = entry.fetch('title')
-      next if SecureBidding::Secret.first(account_id: account_id.to_i, title: title)
+      next if SecureBidding::Secret.first(account_id: account_id, title: title)
 
-      secret = SecureBidding::Secret.new(account_id: account_id.to_i, title: title)
-      secret.encrypt_data(entry.fetch('plaintext'), entry.fetch('key'))
+      secret = SecureBidding::Secret.new(account_id: account_id, title: title)
+      secret.encrypt_data(entry.fetch('plaintext'))
       secret.save
     end
 

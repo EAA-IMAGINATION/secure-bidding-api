@@ -2,6 +2,7 @@
 
 require 'roda'
 require 'json'
+require 'logger'
 require_relative '../models/bid'
 require_relative '../models/account'
 require_relative '../models/secret'
@@ -9,14 +10,31 @@ require_relative '../models/secret'
 module SecureBidding
   # Rack application for the secure bidding API.
   class App < Roda
+    UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/.freeze
+    APP_LOGGER = Logger.new($stdout)
+
     plugin :json
     plugin :halt
+    plugin :error_handler do |error|
+      APP_LOGGER.error("Unhandled error: #{error.class} - #{error.message}")
+      raise error
+    end
 
     def parse_json_request_body
       JSON.parse(request.body.read)
     rescue JSON::ParserError
       response.status = 400
       { error: 'Invalid JSON payload' }
+    end
+
+    def valid_uuid?(value)
+      value.to_s.match?(UUID_FORMAT)
+    end
+
+    def log_mass_assignment_attempt(resource, payload, allowed_columns)
+      payload_keys = payload.keys.map(&:to_s)
+      blocked_keys = payload_keys - allowed_columns.map(&:to_s)
+      APP_LOGGER.warn("[mass_assignment] resource=#{resource} keys=#{blocked_keys.join(',')}")
     end
 
     # rubocop:disable Metrics/BlockLength
@@ -92,31 +110,46 @@ module SecureBidding
 
             # POST /api/v1/accounts - create account
             r.post do
+              payload = {}
               data = parse_json_request_body
               if response.status == 400
                 data
               else
-                username = data['username']
-                email = data['email']
+                payload = data
+                account = Account.new
+                account.set(payload.transform_keys(&:to_sym))
+
+                username = account.username
+                email = account.email
                 required_missing = [username, email].any? { |value| value.to_s.strip.empty? }
 
                 if required_missing
                   response.status = 400
                   { error: 'username and email are required' }
                 else
-                  account = Account.create(username: username, email: email)
+                  account.save
+                  APP_LOGGER.info("account_created id=#{account.id}")
                   response.status = 201
                   { id: account.id, status: 'created' }
                 end
               end
+            rescue Sequel::MassAssignmentRestriction
+              log_mass_assignment_attempt('account', payload, Account.allowed_columns)
+              response.status = 400
+              { error: 'Invalid account attributes' }
             rescue Sequel::UniqueConstraintViolation
               response.status = 400
               { error: 'username and email must be unique' }
             end
 
             # GET /api/v1/accounts/:id - single account
-            r.on Integer do |id|
+            r.on String do |id|
               r.get true do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Account not found' }
+                end
+
                 account = Account[id]
                 if account
                   { id: account.id, username: account.username, email: account.email }
@@ -129,6 +162,11 @@ module SecureBidding
               # GET /api/v1/accounts/:id/secrets - list secrets for a single account
               r.on 'secrets' do
                 r.get true do
+                  unless valid_uuid?(id)
+                    response.status = 404
+                    next { error: 'Account not found' }
+                  end
+
                   account = Account[id]
                   if account
                     secrets = account.secrets_dataset.order(:id).all.map do |secret|
@@ -156,39 +194,51 @@ module SecureBidding
 
             # POST /api/v1/secrets - Create encrypted secret
             r.post do
+              payload = {}
               data = parse_json_request_body
               if response.status == 400
                 data
               else
-                account_id = data['account_id']
-                title = data['title']
-                plaintext = data['plaintext']
-                key = data['key']
+                payload = data
+                account_id = payload['account_id']
+                title = payload['title']
+                plaintext = payload['plaintext']
 
-                required_missing = [account_id, title, plaintext, key].any? { |value| value.to_s.strip.empty? }
+                required_missing = [account_id, title, plaintext].any? { |value| value.to_s.strip.empty? }
                 if required_missing
                   response.status = 400
-                  { error: 'account_id, title, plaintext, and key are required' }
-                elsif key.to_s.bytesize != 32
+                  { error: 'account_id, title, and plaintext are required' }
+                elsif !valid_uuid?(account_id)
                   response.status = 400
-                  { error: 'key must be exactly 32 bytes' }
-                elsif Account[account_id.to_i].nil?
+                  { error: 'account_id must be a UUID' }
+                elsif Account[account_id].nil?
                   response.status = 400
                   { error: 'account_id does not reference an existing account' }
                 else
-                  secret = Secret.new(account_id: account_id.to_i, title: title)
-                  secret.encrypt_data(plaintext, key)
+                  secret = Secret.new
+                  secret.set(payload.reject { |key_name, _| key_name == 'plaintext' }.transform_keys(&:to_sym))
+                  secret.encrypt_data(plaintext)
                   secret.save
 
+                  APP_LOGGER.info("secret_created id=#{secret.id}")
                   response.status = 201
                   { id: secret.id, status: 'created' }
                 end
               end
+            rescue Sequel::MassAssignmentRestriction
+              log_mass_assignment_attempt('secret', payload, Secret.allowed_columns + [:plaintext])
+              response.status = 400
+              { error: 'Invalid secret attributes' }
             end
 
             # GET /api/v1/secrets/:id - secret metadata only
-            r.on Integer do |id|
+            r.on String do |id|
               r.get do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Secret not found' }
+                end
+
                 secret = Secret[id]
                 if secret
                   { id: secret.id, account_id: secret.account_id, title: secret.title }

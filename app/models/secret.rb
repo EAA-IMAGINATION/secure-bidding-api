@@ -1,26 +1,21 @@
 # frozen_string_literal: true
 
-require 'rbnacl'
+require_relative '../lib/secure_db'
 
 module SecureBidding
   class Secret < Sequel::Model(:secrets)
+    plugin :uuid, field: :id
+    plugin :whitelist_security
+    set_allowed_columns :account_id, :title
+
     many_to_one :account, key: :account_id, class: 'SecureBidding::Account'
 
-    def encrypt_data(plaintext, key)
-      self.encrypted_data = crypto_box(key).encrypt(plaintext.to_s.b)
+    def encrypt_data(plaintext)
+      self.secure_encrypted_data = SecureDB.encrypt(plaintext)
     end
 
-    def decrypt_data(key)
-      crypto_box(key).decrypt(encrypted_data).force_encoding('UTF-8')
-    end
-
-    private
-
-    def crypto_box(key)
-      secret_key = key.to_s.b
-      raise ArgumentError, 'key must be exactly 32 bytes' unless secret_key.bytesize == 32
-
-      RbNaCl::SimpleBox.from_secret_key(secret_key)
+    def decrypt_data
+      SecureDB.decrypt(secure_encrypted_data)
     end
   end
 end

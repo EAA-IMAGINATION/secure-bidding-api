@@ -5,6 +5,7 @@ ENV['RACK_ENV'] = 'test'
 require 'minitest/autorun'
 require 'rack/test'
 require 'json'
+require 'cgi'
 require_relative '../app/require_app'
 
 describe 'API /api/v1/secrets' do
@@ -23,7 +24,7 @@ describe 'API /api/v1/secrets' do
   it 'HAPPY: returns all secrets metadata from GET /api/v1/secrets' do
     account = SecureBidding::Account.create(username: 'list-user', email: 'list-user@example.com')
     secret = SecureBidding::Secret.new(account_id: account.id, title: 'api-key')
-    secret.encrypt_data('key-1', 'c' * 32)
+    secret.encrypt_data('key-1')
     secret.save
 
     get '/api/v1/secrets'
@@ -42,8 +43,7 @@ describe 'API /api/v1/secrets' do
     payload = {
       account_id: account.id,
       title: 'db-password',
-      plaintext: 'p@ssw0rd',
-      key: 'a' * 32
+      plaintext: 'p@ssw0rd'
     }
 
     post '/api/v1/secrets', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
@@ -55,7 +55,7 @@ describe 'API /api/v1/secrets' do
 
     stored = SecureBidding::Secret[response_body['id']]
     _(stored).wont_be_nil
-    _(stored.encrypted_data).wont_equal payload[:plaintext]
+    _(stored.secure_encrypted_data).wont_equal payload[:plaintext]
   end
 
   it 'SAD: returns 400 for invalid payload' do
@@ -63,13 +63,13 @@ describe 'API /api/v1/secrets' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'account_id, title, plaintext, and key are required'
+    _(response_body['error']).must_equal 'account_id, title, and plaintext are required'
   end
 
   it 'HAPPY: returns secret metadata for an existing id' do
     account = SecureBidding::Account.create(username: 'meta-user', email: 'meta-user@example.com')
     secret = SecureBidding::Secret.new(account_id: account.id, title: 'api-token')
-    secret.encrypt_data('token-123', 'b' * 32)
+    secret.encrypt_data('token-123')
     secret.save
 
     get "/api/v1/secrets/#{secret.id}"
@@ -83,10 +83,47 @@ describe 'API /api/v1/secrets' do
   end
 
   it 'SAD: returns 404 for missing secret id' do
-    get '/api/v1/secrets/999999'
+    get '/api/v1/secrets/00000000-0000-0000-0000-000000000000'
 
     _(last_response.status).must_equal 404
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'Secret not found'
+  end
+
+  it 'SAD: blocks mass assignment keys for secret creation' do
+    account = SecureBidding::Account.create(username: 'locked-user', email: 'locked@example.com')
+    payload = {
+      account_id: account.id,
+      title: 'db-password',
+      plaintext: 'p@ssw0rd',
+      id: 'forced-id'
+    }
+
+    post '/api/v1/secrets', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Invalid secret attributes'
+    _(SecureBidding::Secret.count).must_equal 0
+  end
+
+  it 'SAD: rejects SQL injection string in account_id for secret creation' do
+    payload = {
+      account_id: "00000000-0000-0000-0000-000000000000' OR 1=1 --",
+      title: 'db-password',
+      plaintext: 'p@ssw0rd'
+    }
+
+    post '/api/v1/secrets', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'account_id must be a UUID'
+  end
+
+  it 'SAD: rejects SQL injection string in secret id route' do
+    get "/api/v1/secrets/#{CGI.escape("00000000-0000-0000-0000-000000000000' OR 1=1 --")}"
+
+    _(last_response.status).must_equal 404
   end
 end

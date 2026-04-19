@@ -5,6 +5,7 @@ ENV['RACK_ENV'] = 'test'
 require 'minitest/autorun'
 require 'rack/test'
 require 'json'
+require 'cgi'
 require_relative '../app/require_app'
 
 describe 'API /api/v1/accounts' do
@@ -64,7 +65,7 @@ describe 'API /api/v1/accounts' do
   end
 
   it 'SAD: returns 404 for unknown account id' do
-    get '/api/v1/accounts/999999'
+    get '/api/v1/accounts/00000000-0000-0000-0000-000000000000'
 
     _(last_response.status).must_equal 404
     response_body = JSON.parse(last_response.body)
@@ -82,8 +83,7 @@ describe 'API /api/v1/accounts' do
          {
            account_id: account_id,
            title: 'flow-token',
-           plaintext: 'top-secret',
-           key: 'z' * 32
+           plaintext: 'top-secret'
          }.to_json,
          { 'CONTENT_TYPE' => 'application/json' }
     _(last_response.status).must_equal 201
@@ -101,10 +101,27 @@ describe 'API /api/v1/accounts' do
   end
 
   it 'SAD: returns 404 for unknown account id on /api/v1/accounts/:id/secrets' do
-    get '/api/v1/accounts/999999/secrets'
+    get '/api/v1/accounts/00000000-0000-0000-0000-000000000000/secrets'
 
     _(last_response.status).must_equal 404
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'Account not found'
+  end
+
+  it 'SAD: blocks mass assignment keys for account creation' do
+    post '/api/v1/accounts',
+         { username: 'acc-user', email: 'acc@example.com', id: 'forced-id' }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Invalid account attributes'
+    _(SecureBidding::Account.count).must_equal 0
+  end
+
+  it 'SAD: rejects SQL injection string in account id route' do
+    get "/api/v1/accounts/#{CGI.escape("00000000-0000-0000-0000-000000000000' OR 1=1 --")}"
+
+    _(last_response.status).must_equal 404
   end
 end
