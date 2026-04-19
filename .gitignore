@@ -57,4 +57,5 @@ config/secrets.yml
 # LSP
 .ruby-lsp/
 
-# specifications/
+# specifications
+specifications/
