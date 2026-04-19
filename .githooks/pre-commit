@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if ! git diff --cached --name-only --diff-filter=ACMR | grep -E '\.md$' >/dev/null; then
+  exit 0
+fi
+
+echo "Running markdownlint on Markdown files..."
+npx --yes markdownlint-cli2 "**/*.md" "#node_modules" 2>&1
