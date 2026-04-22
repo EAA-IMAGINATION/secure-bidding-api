@@ -1,335 +1,166 @@
 # Secure Bidding API
 
-A secure bidding platform API designed for students and freelancers to
-submit project proposals and pricing without fear of bid leaking or
-price-fixing. Contractors upload their bids encrypted with the client's NaCl
-public key.
+Secure Bidding API is a Ruby/Roda service with:
 
-## Features
+- file-based encrypted bid records (`app/db/store`)
+- Sequel/SQLite-backed projects and bid submissions (`app/db/*.db`)
 
-- **Encrypted Bid Submission**: All bids are encrypted using NaCl cryptography
-- **Secure Storage**: Sequel + SQLite support for encrypted secrets data
-- **Database Migrations**: Rake task for `development.db` and `test.db`
-- **Account + Secret Resources**: Table-backed account and secret routes
-- **RESTful API**: Clean, simple API endpoints for bid management
+## Quick Start (copy/paste)
 
-## Setup
-
-1. Install dependencies:
+Run from the repository root:
 
 ```bash
 bundle install
-```
-
-1. Ensure the storage directory exists:
-
-```bash
+cp config/secrets-example.yml config/secrets.yml
 mkdir -p app/db/store
-```
-
-1. Run database migrations:
-
-```bash
 bundle exec rake db:migrate
-```
-
-1. Seed account/secret demo data:
-
-```bash
 bundle exec rake db:seed
-```
-
-1. Optional database helpers:
-
-```bash
-bundle exec rake db:reset
-bundle exec rake db:version
-```
-
-1. Open a preloaded console:
-
-```bash
-bundle exec rake console
-```
-
-1. Run the application:
-
-```bash
 bundle exec rackup -p 9292
 ```
 
-If port 9292 is already in use, either stop the existing process or run on
-another port:
+Server is now on `http://localhost:9292`.
 
-```bash
-bundle exec rackup -p 9393
-```
+## End-to-End Demo Flow
 
-## API Routes
+Use a second terminal for `curl` commands.
 
-### Health Check
-
-#### GET /
+### 1. Health check
 
 ```bash
 curl http://localhost:9292/
 ```
 
-Response:
+Expected:
 
 ```json
-{
-  "message": "Secure Bidding API v1.0",
-  "status": "ok"
-}
+{"message":"Secure Bidding API v1.0","status":"ok"}
 ```
 
-### Create a Bid
+### 2. Verify seeded project/bid submission metadata
 
-#### POST /api/v1/bids
+```bash
+curl http://localhost:9292/api/v1/projects
+curl http://localhost:9292/api/v1/bid_submissions
+```
 
-Creates a new encrypted bid.
+Expected: seeded accounts and secret metadata are returned
+(no plaintext/encrypted payload in response).
 
-Request:
+### 3. Create a new project
+
+```bash
+curl -X POST http://localhost:9292/api/v1/projects \
+  -H "Content-Type: application/json" \
+  -d '{"title":"demo-project","budget_cents":120000}'
+```
+
+Expected:
+
+```json
+{"id":"UUID","status":"created"}
+```
+
+### 4. Create a bid submission for that project
+
+Replace `PROJECT_ID` with the `id` returned above.
+
+```bash
+curl -X POST http://localhost:9292/api/v1/bid_submissions \
+  -H "Content-Type: application/json" \
+  -d '{"project_id":"PROJECT_ID","contractor_alias":"demo-freelancer","plaintext_bid":"top-secret"}'
+```
+
+Expected:
+
+```json
+{"id":"UUID","status":"created"}
+```
+
+### 5. Verify project-owned bid submission flow
+
+```bash
+curl http://localhost:9292/api/v1/projects/PROJECT_ID/bid_submissions
+```
+
+Expected: list includes your `demo-freelancer` entry.
+
+### 6. Verify bid flow
+
+Create bid:
 
 ```bash
 curl -X POST http://localhost:9292/api/v1/bids \
   -H "Content-Type: application/json" \
-  -d '{
-    "contractor": "ABC Construction",
-    "project_id": "project-123",
-    "encrypted_bid": "base64_encrypted_data_here"
-  }'
+  -d '{"contractor":"ABC Construction","project_id":"project-123","encrypted_bid":"base64_encrypted_data_here"}'
 ```
 
-Response (201 Created):
-
-```json
-{
-  "bid_id": "550e8400-e29b-41d4-a716-446655440000",
-  "status": "created"
-}
-```
-
-Error Response (400 Bad Request):
-
-```json
-{
-  "error": "encrypted_bid is required and cannot be empty"
-}
-```
-
-### Get a Specific Bid
-
-#### GET /api/v1/bids/:id
-
-Retrieves details of a specific bid by ID.
-
-Request:
-
-```bash
-curl http://localhost:9292/api/v1/bids/550e8400-e29b-41d4-a716-446655440000
-```
-
-Response (200 OK):
-
-```json
-{
-  "id": "550e8400-e29b-41d4-a716-446655440000",
-  "contractor": "ABC Construction",
-  "project_id": "project-123",
-  "encrypted_bid": "base64_encrypted_data_here"
-}
-```
-
-Error Response (404 Not Found):
-
-```json
-{
-  "error": "Bid not found"
-}
-```
-
-### Get All Bid IDs
-
-#### GET /api/v1/bids
-
-Returns a list of all bid IDs in the system.
-
-Request:
+Then list and fetch by id:
 
 ```bash
 curl http://localhost:9292/api/v1/bids
+curl http://localhost:9292/api/v1/bids/BID_ID
 ```
 
-Response (200 OK):
-
-```json
-{
-  "bid_ids": [
-    "550e8400-e29b-41d4-a716-446655440001",
-    "550e8400-e29b-41d4-a716-446655440002",
-    "550e8400-e29b-41d4-a716-446655440003"
-  ]
-}
-```
-
-### Accounts Routes
-
-#### POST /api/v1/accounts
-
-Creates a new account.
-
-Request:
-
-```bash
-curl -X POST http://localhost:9292/api/v1/accounts \
-  -H "Content-Type: application/json" \
-  -d '{
-    "username": "alice",
-    "email": "alice@example.com"
-  }'
-```
-
-Response (201 Created):
-
-```json
-{
-  "id": 1,
-  "status": "created"
-}
-```
-
-#### GET /api/v1/accounts
-
-Returns all accounts.
-
-#### GET /api/v1/accounts/:id
-
-Returns a single account.
-
-#### GET /api/v1/accounts/:id/secrets
-
-Returns all secret metadata owned by the account.
-
-Response (200 OK):
-
-```json
-{
-  "account_id": 1,
-  "secrets": [
-    {
-      "id": 1,
-      "account_id": 1,
-      "title": "db-password"
-    }
-  ]
-}
-```
-
-### Create a Secret
-
-#### POST /api/v1/secrets
-
-Creates a new encrypted secret using a 32-byte symmetric key.
-An account must exist first, and `account_id` must reference that account.
-
-Request:
-
-```bash
-curl -X POST http://localhost:9292/api/v1/secrets \
-  -H "Content-Type: application/json" \
-  -d '{
-    "account_id": 1,
-    "title": "db-password",
-    "plaintext": "super-secret-value",
-    "key": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-  }'
-```
-
-Response (201 Created):
-
-```json
-{
-  "id": 1,
-  "status": "created"
-}
-```
-
-### Get Secret Metadata
-
-#### GET /api/v1/secrets/:id
-
-Returns secret metadata without exposing encrypted payload bytes.
-
-Response (200 OK):
-
-```json
-{
-  "id": 1,
-  "account_id": 1,
-  "title": "db-password"
-}
-```
-
-## Testing
-
-Run all tests:
-
-```bash
-bundle exec rake spec
-```
-
-Run specific test file:
-
-```bash
-bundle exec ruby spec/api_spec.rb
-bundle exec ruby spec/bid_spec.rb
-bundle exec ruby spec/accounts_api_spec.rb
-bundle exec ruby spec/secrets_api_spec.rb
-bundle exec ruby spec/secret_spec.rb
-```
-
-Set up test database once before running specs:
+## Test
 
 ```bash
 RACK_ENV=test bundle exec rake db:migrate
+bundle exec rake spec
 ```
 
-## Project Structure
+## Enforce Markdown linting before commit
 
-```text
-.
-├── app/
-│   ├── controllers/
-│   │   └── app.rb           # Roda API routes
-│   ├── models/
-│   │   ├── bid.rb           # Bid model
-│   │   ├── account.rb       # Sequel account model
-│   │   └── secret.rb        # Sequel secret model + encryption
-│   └── db/
-│       ├── store/           # JSON file storage
-│       ├── migrations/      # Sequel database migrations
-│       └── seeds/           # Seed data
-│           ├── accounts_seed.yml
-│           ├── secrets_seed.yml
-│           └── bids_seed.yml
-├── spec/
-│   ├── api_spec.rb          # API endpoint tests
-│   ├── bid_spec.rb          # Bid model tests
-│   ├── secret_spec.rb       # Secret model tests
-│   └── secrets_api_spec.rb  # Secret API tests
-├── config.ru                # Rack configuration
-├── config/environments.rb   # Environment-aware DB config
-├── Gemfile                  # Ruby dependencies
-└── README.md
+Install the repository pre-commit hook once:
+
+```bash
+git config core.hooksPath .githooks
 ```
 
-## Security Considerations
+The hook blocks commits when Markdown lint errors exist.
 
-See GitHub Issues for identified security vulnerabilities and planned
-improvements.
+## Cleanup / Reset
 
-## License
+Clear all app data in current environment (projects, bid submissions, bid files):
 
-See LICENSE file for details.
+```bash
+bundle exec rake db:clear
+```
+
+Reset databases (drop + migrate):
+
+```bash
+bundle exec rake db:reset
+```
+
+Remove database files:
+
+```bash
+bundle exec rake db:drop
+```
+
+## Useful Tasks
+
+```bash
+bundle exec rake db:create
+bundle exec rake db:migrate
+bundle exec rake db:seed
+bundle exec rake db:clear
+bundle exec rake db:reset
+bundle exec rake db:version
+bundle exec rake console
+bundle exec rake spec
+```
+
+## API Routes
+
+- `GET /`
+- `GET /api/v1/bids`
+- `GET /api/v1/bids/:id`
+- `POST /api/v1/bids`
+- `GET /api/v1/projects`
+- `GET /api/v1/projects/:id`
+- `POST /api/v1/projects`
+- `GET /api/v1/projects/:id/bid_submissions`
+- `GET /api/v1/bid_submissions`
+- `GET /api/v1/bid_submissions/:id`
+- `POST /api/v1/bid_submissions`

@@ -2,11 +2,12 @@
 
 source 'https://rubygems.org'
 
+gem 'figaro'
 gem 'json'
 gem 'rackup'
+gem 'rake'
 gem 'rbnacl'
 gem 'roda'
-gem 'rake'
 gem 'sequel'
 gem 'sqlite3'
 gem 'webrick'

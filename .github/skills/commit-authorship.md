@@ -8,8 +8,11 @@
 
 1. Commit only after running the project tests for the implemented change.
 2. Keep commit messages short and meaningful.
-3. Include the required co-author trailer:
-   `Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>`
+3. Never include any AI co-author trailer in commit messages.
+4. Hard stop: if a draft commit message contains `Co-authored-by: Copilot` (or any
+   AI co-author trailer), remove it before presenting or running the commit.
+5. The assistant should prepare the commit message and staged file set, then ask
+   the developer to run the commit command manually.
 
 ## Notes
 

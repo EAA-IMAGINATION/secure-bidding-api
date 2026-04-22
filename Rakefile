@@ -66,7 +66,22 @@ namespace :db do
     end
   end
 
-  desc 'Seed the current environment database with account and secret data'
+  desc 'Clear app data in current environment (projects, bid submissions, bid files)'
+  task :clear do
+    require_relative 'app/require_app'
+
+    env = SecureBidding::Database.environment
+    SecureBidding::Database.connect!(env)
+    SecureBidding::Database.migrate!(env)
+
+    SecureBidding::BidSubmission.dataset.delete
+    SecureBidding::Project.dataset.delete
+    Dir.glob(File.expand_path('app/db/store/*.json', __dir__)).each { |file| File.delete(file) }
+
+    puts "Cleared app data in #{env}"
+  end
+
+  desc 'Seed the current environment database with project and bid submission data'
   task :seed do
     require_relative 'app/require_app'
 
@@ -75,44 +90,51 @@ namespace :db do
     SecureBidding::Database.migrate!(env)
 
     seed_dir = File.expand_path('app/db/seeds', __dir__)
-    accounts_seed_file = File.join(seed_dir, 'accounts_seed.yml')
-    secrets_seed_file = File.join(seed_dir, 'secrets_seed.yml')
+    projects_seed_file = File.join(seed_dir, 'projects_seed.yml')
+    bid_submissions_seed_file = File.join(seed_dir, 'bid_submissions_seed.yml')
 
-    accounts_payload = if File.exist?(accounts_seed_file)
-                         YAML.safe_load(File.read(accounts_seed_file), permitted_classes: [], aliases: false) || {}
+    projects_payload = if File.exist?(projects_seed_file)
+                         YAML.safe_load(File.read(projects_seed_file), permitted_classes: [], aliases: false) || {}
                        else
                          {}
                        end
-    secrets_payload = if File.exist?(secrets_seed_file)
-                        YAML.safe_load(File.read(secrets_seed_file), permitted_classes: [], aliases: false) || {}
-                      else
-                        {}
-                      end
-    account_entries = accounts_payload.fetch('accounts', [])
-    secret_entries = secrets_payload.fetch('secrets', [])
+    bid_submissions_payload = if File.exist?(bid_submissions_seed_file)
+                                YAML.safe_load(
+                                  File.read(bid_submissions_seed_file),
+                                  permitted_classes: [],
+                                  aliases: false
+                                ) || {}
+                              else
+                                {}
+                              end
+    project_entries = projects_payload.fetch('projects', [])
+    bid_submission_entries = bid_submissions_payload.fetch('bid_submissions', [])
 
-    account_ids_by_username = {}
-    account_entries.each do |entry|
-      username = entry.fetch('username')
-      email = entry.fetch('email')
-      account = SecureBidding::Account.first(username: username) ||
-                SecureBidding::Account.create(username: username, email: email)
-      account_ids_by_username[username] = account.id
-    end
-
-    secret_entries.each do |entry|
-      account_id = entry['account_id'] || account_ids_by_username[entry['account_username']]
-      raise "Seed secret '#{entry['title']}' references an unknown account" if account_id.nil?
-
+    project_ids_by_title = {}
+    project_entries.each do |entry|
       title = entry.fetch('title')
-      next if SecureBidding::Secret.first(account_id: account_id.to_i, title: title)
-
-      secret = SecureBidding::Secret.new(account_id: account_id.to_i, title: title)
-      secret.encrypt_data(entry.fetch('plaintext'), entry.fetch('key'))
-      secret.save
+      budget_cents = entry.fetch('budget_cents')
+      project = SecureBidding::Project.first(title: title) ||
+                SecureBidding::Project.create(title: title, budget_cents: budget_cents)
+      project_ids_by_title[title] = project.id
     end
 
-    puts "Seeded #{SecureBidding::Account.count} accounts and #{SecureBidding::Secret.count} secrets in #{env}"
+    bid_submission_entries.each do |entry|
+      project_id = entry['project_id'] || project_ids_by_title[entry['project_title']]
+      raise "Seed bid submission '#{entry['contractor_alias']}' references an unknown project" if project_id.nil?
+
+      contractor_alias = entry.fetch('contractor_alias')
+      next if SecureBidding::BidSubmission.first(project_id: project_id, contractor_alias: contractor_alias)
+
+      bid_submission = SecureBidding::BidSubmission.new(project_id: project_id, contractor_alias: contractor_alias)
+      bid_submission.encrypt_bid(entry.fetch('plaintext_bid'))
+      bid_submission.save
+    end
+
+    puts(
+      "Seeded #{SecureBidding::Project.count} projects and " \
+      "#{SecureBidding::BidSubmission.count} bid submissions in #{env}"
+    )
   end
 end
 
@@ -123,6 +145,6 @@ task :console do
   require_relative 'app/require_app'
 
   puts "Loaded app in #{SecureBidding::Database.environment} environment"
-  puts 'Examples: SecureBidding::Account.all, SecureBidding::Secret.all'
+  puts 'Examples: SecureBidding::Project.all, SecureBidding::BidSubmission.all'
   Pry.start
 end

@@ -44,6 +44,7 @@ app/db/*.db-wal
 # Environment
 .env
 .env.local
+config/secrets.yml
 
 # IDE
 .vscode/
@@ -55,3 +56,6 @@ app/db/*.db-wal
 
 # LSP
 .ruby-lsp/
+
+# specifications
+specifications/
