@@ -4,6 +4,7 @@ require 'yaml'
 require_relative 'environments'
 
 module SecureBidding
+  # Loads per-environment secret configuration for encryption key management.
   module SecretsConfig
     module_function
 

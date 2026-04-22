@@ -3,6 +3,7 @@
 require 'figaro'
 
 module SecureBidding
+  # Helpers for loading environment-specific configuration and secrets.
   module Environment
     module_function
 

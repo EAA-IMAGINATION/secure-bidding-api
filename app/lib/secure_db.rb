@@ -4,6 +4,7 @@ require 'rbnacl'
 require_relative '../../config/secrets'
 
 module SecureBidding
+  # Encrypts and decrypts sensitive database payloads using the configured DB key.
   module SecureDB
     module_function
 
