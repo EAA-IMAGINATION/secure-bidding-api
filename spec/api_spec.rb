@@ -18,8 +18,8 @@ describe 'API /api/v1/bids' do
   before do
     # Clean up store before each test
     SecureBidding::Database.migrate!
-    SecureBidding::Secret.dataset.delete
-    SecureBidding::Account.dataset.delete
+    SecureBidding::BidSubmission.dataset.delete
+    SecureBidding::Project.dataset.delete
     Dir.glob('app/db/store/*.json').each { |f| File.delete(f) }
   end
 

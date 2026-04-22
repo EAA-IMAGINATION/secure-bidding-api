@@ -23,11 +23,7 @@ module SecureBidding
     def connect!(env = environment)
       FileUtils.mkdir_p(DB_DIR)
       SecureBidding.send(:remove_const, :DB) if SecureBidding.const_defined?(:DB)
-      connection = if ENV.key?('DATABASE_URL')
-                     Sequel.connect(SecureBidding::Environment.database_url)
-                   else
-                     Sequel.sqlite(db_file_for(env))
-                   end
+      connection = Sequel.connect(SecureBidding::Environment.database_url(env))
       SecureBidding.const_set(:DB, connection)
     end
 

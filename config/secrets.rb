@@ -20,17 +20,18 @@ module SecureBidding
 
     def secrets_payload
       @secrets_payload ||= begin
-        path = if File.exist?(secrets_file_path)
-                 secrets_file_path
-               else
-                 example_secrets_file_path
-               end
+        path = [secrets_file_path, secrets_example_file_path, example_secrets_file_path]
+               .find { |candidate| File.exist?(candidate) }
         YAML.safe_load(File.read(path), permitted_classes: [], aliases: false) || {}
       end
     end
 
     def secrets_file_path
       File.join(__dir__, 'secrets.yml')
+    end
+
+    def secrets_example_file_path
+      File.join(__dir__, 'secrets-example.yml')
     end
 
     def example_secrets_file_path

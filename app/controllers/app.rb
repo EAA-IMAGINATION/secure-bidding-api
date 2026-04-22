@@ -4,8 +4,8 @@ require 'roda'
 require 'json'
 require 'logger'
 require_relative '../models/bid'
-require_relative '../models/account'
-require_relative '../models/secret'
+require_relative '../models/project'
+require_relative '../models/bid_submission'
 
 module SecureBidding
   # Rack application for the secure bidding API.
@@ -99,16 +99,16 @@ module SecureBidding
             end
           end
 
-          r.on 'accounts' do
-            # GET /api/v1/accounts - list all accounts
+          r.on 'projects' do
+            # GET /api/v1/projects - list all projects
             r.get true do
-              accounts = Account.order(:id).all.map do |account|
-                { id: account.id, username: account.username, email: account.email }
+              projects = Project.order(:id).all.map do |project|
+                { id: project.id, title: project.title, budget_cents: project.budget_cents }
               end
-              { accounts: accounts }
+              { projects: projects }
             end
 
-            # POST /api/v1/accounts - create account
+            # POST /api/v1/projects - create project
             r.post do
               payload = {}
               data = parse_json_request_body
@@ -116,83 +116,95 @@ module SecureBidding
                 data
               else
                 payload = data
-                account = Account.new
-                account.set(payload.transform_keys(&:to_sym))
+                project = Project.new
+                project.set(payload.transform_keys(&:to_sym))
 
-                username = account.username
-                email = account.email
-                required_missing = [username, email].any? { |value| value.to_s.strip.empty? }
+                title = project.title
+                budget_cents = project.budget_cents
+                required_missing = title.to_s.strip.empty? || budget_cents.to_s.strip.empty?
+                invalid_budget = !budget_cents.to_s.match?(/\A\d+\z/)
 
                 if required_missing
                   response.status = 400
-                  { error: 'username and email are required' }
+                  { error: 'title and budget_cents are required' }
+                elsif invalid_budget
+                  response.status = 400
+                  { error: 'budget_cents must be a non-negative integer' }
                 else
-                  account.save
-                  APP_LOGGER.info("account_created id=#{account.id}")
+                  project.save
+                  APP_LOGGER.info("project_created id=#{project.id}")
                   response.status = 201
-                  { id: account.id, status: 'created' }
+                  { id: project.id, status: 'created' }
                 end
               end
             rescue Sequel::MassAssignmentRestriction
-              log_mass_assignment_attempt('account', payload, Account.allowed_columns)
+              log_mass_assignment_attempt('project', payload, Project.allowed_columns)
               response.status = 400
-              { error: 'Invalid account attributes' }
+              { error: 'Invalid project attributes' }
             rescue Sequel::UniqueConstraintViolation
               response.status = 400
-              { error: 'username and email must be unique' }
+              { error: 'project title must be unique' }
             end
 
-            # GET /api/v1/accounts/:id - single account
+            # GET /api/v1/projects/:id - single project
             r.on String do |id|
               r.get true do
                 unless valid_uuid?(id)
                   response.status = 404
-                  next { error: 'Account not found' }
+                  next { error: 'Project not found' }
                 end
 
-                account = Account[id]
-                if account
-                  { id: account.id, username: account.username, email: account.email }
+                project = Project[id]
+                if project
+                  { id: project.id, title: project.title, budget_cents: project.budget_cents }
                 else
                   response.status = 404
-                  { error: 'Account not found' }
+                  { error: 'Project not found' }
                 end
               end
 
-              # GET /api/v1/accounts/:id/secrets - list secrets for a single account
-              r.on 'secrets' do
+              # GET /api/v1/projects/:id/bid_submissions - list bid submissions for a project
+              r.on 'bid_submissions' do
                 r.get true do
                   unless valid_uuid?(id)
                     response.status = 404
-                    next { error: 'Account not found' }
+                    next { error: 'Project not found' }
                   end
 
-                  account = Account[id]
-                  if account
-                    secrets = account.secrets_dataset.order(:id).all.map do |secret|
-                      { id: secret.id, account_id: secret.account_id, title: secret.title }
+                  project = Project[id]
+                  if project
+                    bid_submissions = project.bid_submissions_dataset.order(:id).all.map do |bid_submission|
+                      {
+                        id: bid_submission.id,
+                        project_id: bid_submission.project_id,
+                        contractor_alias: bid_submission.contractor_alias
+                      }
                     end
-                    { account_id: account.id, secrets: secrets }
+                    { project_id: project.id, bid_submissions: bid_submissions }
                   else
                     response.status = 404
-                    { error: 'Account not found' }
+                    { error: 'Project not found' }
                   end
                 end
               end
             end
           end
 
-          r.on 'secrets' do
-            # GET /api/v1/secrets - list metadata for all secrets
+          r.on 'bid_submissions' do
+            # GET /api/v1/bid_submissions - list metadata for all bid submissions
             r.get true do
-              secrets = Secret.order(:id).all.map do |secret|
-                { id: secret.id, account_id: secret.account_id, title: secret.title }
+              bid_submissions = BidSubmission.order(:id).all.map do |bid_submission|
+                {
+                  id: bid_submission.id,
+                  project_id: bid_submission.project_id,
+                  contractor_alias: bid_submission.contractor_alias
+                }
               end
 
-              { secrets: secrets }
+              { bid_submissions: bid_submissions }
             end
 
-            # POST /api/v1/secrets - Create encrypted secret
+            # POST /api/v1/bid_submissions - create encrypted bid submission
             r.post do
               payload = {}
               data = parse_json_request_body
@@ -200,51 +212,57 @@ module SecureBidding
                 data
               else
                 payload = data
-                account_id = payload['account_id']
-                title = payload['title']
-                plaintext = payload['plaintext']
+                project_id = payload['project_id']
+                contractor_alias = payload['contractor_alias']
+                plaintext_bid = payload['plaintext_bid']
 
-                required_missing = [account_id, title, plaintext].any? { |value| value.to_s.strip.empty? }
+                required_missing = [project_id, contractor_alias, plaintext_bid]
+                                   .any? { |value| value.to_s.strip.empty? }
                 if required_missing
                   response.status = 400
-                  { error: 'account_id, title, and plaintext are required' }
-                elsif !valid_uuid?(account_id)
+                  { error: 'project_id, contractor_alias, and plaintext_bid are required' }
+                elsif !valid_uuid?(project_id)
                   response.status = 400
-                  { error: 'account_id must be a UUID' }
-                elsif Account[account_id].nil?
+                  { error: 'project_id must be a UUID' }
+                elsif Project[project_id].nil?
                   response.status = 400
-                  { error: 'account_id does not reference an existing account' }
+                  { error: 'project_id does not reference an existing project' }
                 else
-                  secret = Secret.new
-                  secret.set(payload.reject { |key_name, _| key_name == 'plaintext' }.transform_keys(&:to_sym))
-                  secret.encrypt_data(plaintext)
-                  secret.save
+                  bid_submission = BidSubmission.new
+                  attributes = payload.reject { |key_name, _| key_name == 'plaintext_bid' }
+                  bid_submission.set(attributes.transform_keys(&:to_sym))
+                  bid_submission.encrypt_bid(plaintext_bid)
+                  bid_submission.save
 
-                  APP_LOGGER.info("secret_created id=#{secret.id}")
+                  APP_LOGGER.info("bid_submission_created id=#{bid_submission.id}")
                   response.status = 201
-                  { id: secret.id, status: 'created' }
+                  { id: bid_submission.id, status: 'created' }
                 end
               end
             rescue Sequel::MassAssignmentRestriction
-              log_mass_assignment_attempt('secret', payload, Secret.allowed_columns + [:plaintext])
+              log_mass_assignment_attempt('bid_submission', payload, BidSubmission.allowed_columns + [:plaintext_bid])
               response.status = 400
-              { error: 'Invalid secret attributes' }
+              { error: 'Invalid bid submission attributes' }
             end
 
-            # GET /api/v1/secrets/:id - secret metadata only
+            # GET /api/v1/bid_submissions/:id - bid submission metadata only
             r.on String do |id|
               r.get do
                 unless valid_uuid?(id)
                   response.status = 404
-                  next { error: 'Secret not found' }
+                  next { error: 'Bid submission not found' }
                 end
 
-                secret = Secret[id]
-                if secret
-                  { id: secret.id, account_id: secret.account_id, title: secret.title }
+                bid_submission = BidSubmission[id]
+                if bid_submission
+                  {
+                    id: bid_submission.id,
+                    project_id: bid_submission.project_id,
+                    contractor_alias: bid_submission.contractor_alias
+                  }
                 else
                   response.status = 404
-                  { error: 'Secret not found' }
+                  { error: 'Bid submission not found' }
                 end
               end
             end
