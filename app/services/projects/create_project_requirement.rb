@@ -12,7 +12,7 @@ module SecureBidding
           owner = SecureBidding::Account[owner_account_id]
           return { ok: false, status: 400, error: 'owner_account_id must reference an existing account' } if owner.nil?
 
-          unless owner.has_system_role?('project_owner')
+          unless owner.system_role?('project_owner')
             return { ok: false, status: 403, error: 'owner account must have project_owner role' }
           end
 

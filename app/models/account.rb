@@ -73,7 +73,7 @@ module SecureBidding
       SearchHash.digest(value)
     end
 
-    def has_system_role?(role_name)
+    def system_role?(role_name)
       system_roles_dataset.where(name: role_name).count.positive?
     end
   end
