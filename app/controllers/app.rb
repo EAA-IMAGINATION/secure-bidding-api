@@ -6,6 +6,20 @@ require 'logger'
 require_relative '../models/bid'
 require_relative '../models/project'
 require_relative '../models/bid_submission'
+require_relative '../models/account'
+require_relative '../models/project_membership'
+require_relative '../models/payment'
+require_relative '../services/accounts/create_account'
+require_relative '../services/accounts/get_account'
+require_relative '../services/accounts/search_accounts'
+require_relative '../services/accounts/update_account'
+require_relative '../services/roles/ensure_roles'
+require_relative '../services/roles/assign_system_role'
+require_relative '../services/projects/create_project_requirement'
+require_relative '../services/projects/assign_project_role'
+require_relative '../services/projects/create_bid_for_project'
+require_relative '../services/payments/create_payment'
+require_relative '../services/payments/update_payment'
 
 module SecureBidding
   # Rack application for the secure bidding API.
@@ -15,6 +29,7 @@ module SecureBidding
 
     plugin :json
     plugin :halt
+    plugin :all_verbs
     plugin :error_handler do |error|
       APP_LOGGER.error("Unhandled error: #{error.class} - #{error.message}")
       raise error
@@ -37,6 +52,36 @@ module SecureBidding
       APP_LOGGER.warn("[mass_assignment] resource=#{resource} keys=#{blocked_keys.join(',')}")
     end
 
+    def account_response(account)
+      {
+        id: account.id,
+        username: account.username,
+        system_role: account.system_role,
+        email: account.email,
+        phone: account.phone
+      }
+    end
+
+    def project_membership_response(membership)
+      {
+        id: membership.id,
+        project_id: membership.project_id,
+        account_id: membership.account_id,
+        role: membership.role.name
+      }
+    end
+
+    def payment_response(payment)
+      {
+        id: payment.id,
+        bid_submission_id: payment.bid_submission_id,
+        paid: payment.paid,
+        method: payment[:method],
+        reference: payment.reference,
+        paid_at: payment.paid_at
+      }
+    end
+
     # rubocop:disable Metrics/BlockLength
     route do |r|
       # Root route - health check
@@ -46,9 +91,11 @@ module SecureBidding
 
       r.on 'api' do
         r.on 'v1' do
+          SecureBidding::Services::Roles::EnsureRoles.call
+
           r.on 'bids' do
             # POST /api/v1/bids - Create a new bid
-            r.post do
+            r.post true do
               # Parse JSON request body
               data = JSON.parse(request.body.read)
 
@@ -109,11 +156,20 @@ module SecureBidding
             end
 
             # POST /api/v1/projects - create project
-            r.post do
+            r.post true do
               payload = {}
               data = parse_json_request_body
               if response.status == 400
                 data
+              elsif data.key?('owner_account_id')
+                result = SecureBidding::Services::Projects::CreateProjectRequirement.call(data)
+                if result[:ok]
+                  response.status = 201
+                  { id: result[:project].id, status: 'created' }
+                else
+                  response.status = result[:status]
+                  { error: result[:error] }
+                end
               else
                 payload = data
                 project = Project.new
@@ -148,6 +204,78 @@ module SecureBidding
 
             # GET /api/v1/projects/:id - single project
             r.on String do |id|
+              r.on 'memberships' do
+                r.get true do
+                  unless valid_uuid?(id)
+                    response.status = 404
+                    next { error: 'Project not found' }
+                  end
+
+                  project = Project[id]
+                  if project.nil?
+                    response.status = 404
+                    { error: 'Project not found' }
+                  else
+                    memberships = project.project_memberships_dataset.eager(:role).order(:id).all
+                    {
+                      project_id: project.id,
+                      memberships: memberships.map { |membership| project_membership_response(membership) }
+                    }
+                  end
+                end
+
+                r.post true do
+                  unless valid_uuid?(id)
+                    response.status = 404
+                    next { error: 'Project not found' }
+                  end
+
+                  data = parse_json_request_body
+                  if response.status == 400
+                    data
+                  else
+                    result = SecureBidding::Services::Projects::AssignProjectRole.call(
+                      project_id: id,
+                      account_id: data['account_id'],
+                      role_name: data['role']
+                    )
+                    if result[:ok]
+                      response.status = 201
+                      project_membership_response(result[:membership])
+                    else
+                      response.status = result[:status]
+                      { error: result[:error] }
+                    end
+                  end
+                end
+              end
+
+              r.on 'bids' do
+                r.post true do
+                  unless valid_uuid?(id)
+                    response.status = 404
+                    next { error: 'Project not found' }
+                  end
+
+                  data = parse_json_request_body
+                  if response.status == 400
+                    data
+                  else
+                    result = SecureBidding::Services::Projects::CreateBidForProject.call(
+                      project_id: id,
+                      payload: data
+                    )
+                    if result[:ok]
+                      response.status = 201
+                      { id: result[:bid_submission].id, status: 'created' }
+                    else
+                      response.status = result[:status]
+                      { error: result[:error] }
+                    end
+                  end
+                end
+              end
+
               r.get true do
                 unless valid_uuid?(id)
                   response.status = 404
@@ -184,6 +312,194 @@ module SecureBidding
                   else
                     response.status = 404
                     { error: 'Project not found' }
+                  end
+                end
+              end
+            end
+          end
+
+          r.on 'accounts' do
+            # GET /api/v1/accounts - list accounts (without secret fields)
+            r.get true do
+              accounts = Account.order(:id).all.map do |account|
+                {
+                  id: account.id,
+                  username: account.username,
+                  system_role: account.system_role
+                }
+              end
+              { accounts: accounts }
+            end
+
+            # POST /api/v1/accounts - create account with protected password/PII persistence
+            r.post true do
+              data = parse_json_request_body
+              if response.status == 400
+                data
+              else
+                result = SecureBidding::Services::Accounts::CreateAccount.call(data)
+                if result[:ok]
+                  response.status = 201
+                  { id: result[:account].id, status: 'created' }
+                else
+                  response.status = result[:status]
+                  { error: result[:error] }
+                end
+              end
+            end
+
+            # GET /api/v1/accounts/search?email=...&phone=...
+            r.on 'search' do
+              r.get true do
+                result = SecureBidding::Services::Accounts::SearchAccounts.call(
+                  email: request.params['email'],
+                  phone: request.params['phone']
+                )
+                if result[:ok]
+                  { accounts: result[:accounts].map { |account| account_response(account) } }
+                else
+                  response.status = result[:status]
+                  { error: result[:error] }
+                end
+              end
+            end
+
+            # GET/PATCH /api/v1/accounts/:id
+            r.on String do |id|
+              r.on 'system_roles' do
+                r.get true do
+                  unless valid_uuid?(id)
+                    response.status = 404
+                    next { error: 'Account not found' }
+                  end
+
+                  account = SecureBidding::Services::Accounts::GetAccount.call(id)
+                  if account
+                    { account_id: account.id, roles: account.system_roles_dataset.order(:name).select_map(:name) }
+                  else
+                    response.status = 404
+                    { error: 'Account not found' }
+                  end
+                end
+
+                r.post true do
+                  data = parse_json_request_body
+                  if response.status == 400
+                    data
+                  else
+                    result = SecureBidding::Services::Roles::AssignSystemRole.call(
+                      account_id: id,
+                      role_name: data['role']
+                    )
+                    if result[:ok]
+                      response.status = 201
+                      { account_id: id, role: result[:role], status: 'assigned' }
+                    else
+                      response.status = result[:status]
+                      { error: result[:error] }
+                    end
+                  end
+                end
+              end
+
+              r.get true do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Account not found' }
+                end
+
+                account = SecureBidding::Services::Accounts::GetAccount.call(id)
+                if account
+                  account_response(account)
+                else
+                  response.status = 404
+                  { error: 'Account not found' }
+                end
+              end
+
+              r.patch true do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Account not found' }
+                end
+
+                account = SecureBidding::Services::Accounts::GetAccount.call(id)
+                if account.nil?
+                  response.status = 404
+                  { error: 'Account not found' }
+                else
+                  data = parse_json_request_body
+                  if response.status == 400
+                    data
+                  else
+                    result = SecureBidding::Services::Accounts::UpdateAccount.call(account, data)
+                    if result[:ok]
+                      { id: result[:account].id, status: 'updated' }
+                    else
+                      response.status = result[:status]
+                      { error: result[:error] }
+                    end
+                  end
+                end
+              end
+            end
+          end
+
+          r.on 'payments' do
+            r.post true do
+              data = parse_json_request_body
+              if response.status == 400
+                data
+              else
+                result = SecureBidding::Services::Payments::CreatePayment.call(data)
+                if result[:ok]
+                  response.status = 201
+                  payment_response(result[:payment])
+                else
+                  response.status = result[:status]
+                  { error: result[:error] }
+                end
+              end
+            end
+
+            r.on String do |id|
+              r.get true do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Payment not found' }
+                end
+
+                payment = Payment[id]
+                if payment
+                  payment_response(payment)
+                else
+                  response.status = 404
+                  { error: 'Payment not found' }
+                end
+              end
+
+              r.patch true do
+                unless valid_uuid?(id)
+                  response.status = 404
+                  next { error: 'Payment not found' }
+                end
+
+                payment = Payment[id]
+                if payment.nil?
+                  response.status = 404
+                  { error: 'Payment not found' }
+                else
+                  data = parse_json_request_body
+                  if response.status == 400
+                    data
+                  else
+                    result = SecureBidding::Services::Payments::UpdatePayment.call(payment: payment, payload: data)
+                    if result[:ok]
+                      payment_response(result[:payment])
+                    else
+                      response.status = result[:status]
+                      { error: result[:error] }
+                    end
                   end
                 end
               end

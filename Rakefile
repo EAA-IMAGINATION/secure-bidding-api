@@ -4,6 +4,7 @@ require 'rake'
 require 'rake/testtask'
 require 'sequel'
 require 'yaml'
+require 'sequel/extensions/seed'
 require_relative 'app/db/database'
 
 begin
@@ -89,50 +90,13 @@ namespace :db do
     SecureBidding::Database.connect!(env)
     SecureBidding::Database.migrate!(env)
 
-    seed_dir = File.expand_path('app/db/seeds', __dir__)
-    projects_seed_file = File.join(seed_dir, 'projects_seed.yml')
-    bid_submissions_seed_file = File.join(seed_dir, 'bid_submissions_seed.yml')
-
-    projects_payload = if File.exist?(projects_seed_file)
-                         YAML.safe_load(File.read(projects_seed_file), permitted_classes: [], aliases: false) || {}
-                       else
-                         {}
-                       end
-    bid_submissions_payload = if File.exist?(bid_submissions_seed_file)
-                                YAML.safe_load(
-                                  File.read(bid_submissions_seed_file),
-                                  permitted_classes: [],
-                                  aliases: false
-                                ) || {}
-                              else
-                                {}
-                              end
-    project_entries = projects_payload.fetch('projects', [])
-    bid_submission_entries = bid_submissions_payload.fetch('bid_submissions', [])
-
-    project_ids_by_title = {}
-    project_entries.each do |entry|
-      title = entry.fetch('title')
-      budget_cents = entry.fetch('budget_cents')
-      project = SecureBidding::Project.first(title: title) ||
-                SecureBidding::Project.create(title: title, budget_cents: budget_cents)
-      project_ids_by_title[title] = project.id
-    end
-
-    bid_submission_entries.each do |entry|
-      project_id = entry['project_id'] || project_ids_by_title[entry['project_title']]
-      raise "Seed bid submission '#{entry['contractor_alias']}' references an unknown project" if project_id.nil?
-
-      contractor_alias = entry.fetch('contractor_alias')
-      next if SecureBidding::BidSubmission.first(project_id: project_id, contractor_alias: contractor_alias)
-
-      bid_submission = SecureBidding::BidSubmission.new(project_id: project_id, contractor_alias: contractor_alias)
-      bid_submission.encrypt_bid(entry.fetch('plaintext_bid'))
-      bid_submission.save
-    end
+    Sequel.extension :seed
+    Sequel::Seed.setup(env.to_sym)
+    Sequel::Seeder.apply(SecureBidding::Database.db, File.expand_path('seeds', __dir__))
 
     puts(
-      "Seeded #{SecureBidding::Project.count} projects and " \
+      "Seeded #{SecureBidding::Account.count} accounts, " \
+      "#{SecureBidding::Project.count} projects, " \
       "#{SecureBidding::BidSubmission.count} bid submissions in #{env}"
     )
   end

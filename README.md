@@ -3,7 +3,8 @@
 Secure Bidding API is a Ruby/Roda service with:
 
 - file-based encrypted bid records (`app/db/store`)
-- Sequel/SQLite-backed projects and bid submissions (`app/db/*.db`)
+- Sequel/SQLite-backed accounts, projects, and bid submissions (`app/db/*.db`)
+- role-aware account/project membership and payment placeholders
 
 ## Quick Start (copy/paste)
 
@@ -36,17 +37,33 @@ Expected:
 {"message":"Secure Bidding API v1.0","status":"ok"}
 ```
 
-### 2. Verify seeded project/bid submission metadata
+### 2. Verify seeded account/project/bid/payment metadata
 
 ```bash
+curl http://localhost:9292/api/v1/accounts
 curl http://localhost:9292/api/v1/projects
 curl http://localhost:9292/api/v1/bid_submissions
+curl http://localhost:9292/api/v1/payments/PAYMENT_ID
 ```
 
-Expected: seeded accounts and secret metadata are returned
+Expected: seeded account/project/bid/payment metadata is returned
 (no plaintext/encrypted payload in response).
 
-### 3. Create a new project
+### 3. Create a new account
+
+```bash
+curl -X POST http://localhost:9292/api/v1/accounts \
+  -H "Content-Type: application/json" \
+  -d '{"username":"demo-user","password":"demo-pass-123","email":"demo@local.test","phone":"+886900000999","system_role":"member"}'
+```
+
+Expected:
+
+```json
+{"id":"UUID","status":"created"}
+```
+
+### 4. Create a new project
 
 ```bash
 curl -X POST http://localhost:9292/api/v1/projects \
@@ -60,7 +77,7 @@ Expected:
 {"id":"UUID","status":"created"}
 ```
 
-### 4. Create a bid submission for that project
+### 5. Create a bid submission for that project
 
 Replace `PROJECT_ID` with the `id` returned above.
 
@@ -76,7 +93,7 @@ Expected:
 {"id":"UUID","status":"created"}
 ```
 
-### 5. Verify project-owned bid submission flow
+### 6. Verify project-owned bid submission flow
 
 ```bash
 curl http://localhost:9292/api/v1/projects/PROJECT_ID/bid_submissions
@@ -84,7 +101,7 @@ curl http://localhost:9292/api/v1/projects/PROJECT_ID/bid_submissions
 
 Expected: list includes your `demo-freelancer` entry.
 
-### 6. Verify bid flow
+### 7. Verify bid flow
 
 Create bid:
 
@@ -99,6 +116,50 @@ Then list and fetch by id:
 ```bash
 curl http://localhost:9292/api/v1/bids
 curl http://localhost:9292/api/v1/bids/BID_ID
+```
+
+### 8. Role-aware project memberships and project bids
+
+Assign role to account (system scope):
+
+```bash
+curl -X POST http://localhost:9292/api/v1/accounts/ACCOUNT_ID/system_roles \
+  -H "Content-Type: application/json" \
+  -d '{"role":"project_owner"}'
+```
+
+Assign account to project (project scope):
+
+```bash
+curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/memberships \
+  -H "Content-Type: application/json" \
+  -d '{"account_id":"ACCOUNT_ID","role":"bidder"}'
+```
+
+Create project bid as assigned bidder:
+
+```bash
+curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/bids \
+  -H "Content-Type: application/json" \
+  -d '{"bidder_account_id":"ACCOUNT_ID","contractor_alias":"demo-bidder","plaintext_bid":"top-secret"}'
+```
+
+### 9. Payment placeholder status
+
+Create placeholder payment:
+
+```bash
+curl -X POST http://localhost:9292/api/v1/payments \
+  -H "Content-Type: application/json" \
+  -d '{"bid_submission_id":"BID_SUBMISSION_ID","paid":false,"method":"placeholder","reference":"demo-ref"}'
+```
+
+Update paid status:
+
+```bash
+curl -X PATCH http://localhost:9292/api/v1/payments/PAYMENT_ID \
+  -H "Content-Type: application/json" \
+  -d '{"paid":true}'
 ```
 
 ## Test
@@ -157,10 +218,23 @@ bundle exec rake spec
 - `GET /api/v1/bids`
 - `GET /api/v1/bids/:id`
 - `POST /api/v1/bids`
+- `GET /api/v1/accounts`
+- `GET /api/v1/accounts/search`
+- `GET /api/v1/accounts/:id`
+- `POST /api/v1/accounts`
+- `PATCH /api/v1/accounts/:id`
+- `GET /api/v1/accounts/:id/system_roles`
+- `POST /api/v1/accounts/:id/system_roles`
 - `GET /api/v1/projects`
 - `GET /api/v1/projects/:id`
 - `POST /api/v1/projects`
+- `GET /api/v1/projects/:id/memberships`
+- `POST /api/v1/projects/:id/memberships`
+- `POST /api/v1/projects/:id/bids`
 - `GET /api/v1/projects/:id/bid_submissions`
 - `GET /api/v1/bid_submissions`
 - `GET /api/v1/bid_submissions/:id`
 - `POST /api/v1/bid_submissions`
+- `POST /api/v1/payments`
+- `GET /api/v1/payments/:id`
+- `PATCH /api/v1/payments/:id`

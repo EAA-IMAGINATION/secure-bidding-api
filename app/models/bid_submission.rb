@@ -10,6 +10,7 @@ module SecureBidding
     set_allowed_columns :project_id, :contractor_alias
 
     many_to_one :project, key: :project_id, class: 'SecureBidding::Project'
+    one_to_many :payments, key: :bid_submission_id, class: 'SecureBidding::Payment'
 
     def encrypt_bid(plaintext)
       self.secure_encrypted_bid = SecureDB.encrypt(plaintext)

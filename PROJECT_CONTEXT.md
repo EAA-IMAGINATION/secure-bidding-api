@@ -3,8 +3,8 @@
 ## Overview
 
 Secure Bidding API is a Ruby/Roda service for encrypted bid submission with
-ongoing security hardening and ORM-backed data for project-owned bid
-submissions.
+ongoing security hardening and ORM-backed data for secure user accounts,
+projects, and project-owned bid submissions.
 
 ## Current Implementation Status
 
@@ -23,19 +23,36 @@ submissions.
   - `GET /api/v1/bid_submissions`
   - `GET /api/v1/bid_submissions/:id`
   - `POST /api/v1/bid_submissions`
+- ORM-backed account resources:
+  - `GET /api/v1/accounts`
+  - `GET /api/v1/accounts/search`
+  - `GET /api/v1/accounts/:id`
+  - `POST /api/v1/accounts`
+  - `PATCH /api/v1/accounts/:id`
+  - `GET /api/v1/accounts/:id/system_roles`
+  - `POST /api/v1/accounts/:id/system_roles`
+- Role-aware project membership resources:
+  - `GET /api/v1/projects/:id/memberships`
+  - `POST /api/v1/projects/:id/memberships`
+  - `POST /api/v1/projects/:id/bids`
+- Payment placeholder resources:
+  - `POST /api/v1/payments`
+  - `GET /api/v1/payments/:id`
+  - `PATCH /api/v1/payments/:id`
 - Sequel + SQLite environment setup in `config/environments.rb`
 - Migrations in `app/db/migrations/`:
   - `001_create_accounts.rb`
   - `002_create_secrets.rb`
   - `003_normalize_secret_foreign_key.rb`
   - `005_replace_accounts_with_projects_and_bid_submissions.rb`
+  - `006_create_user_accounts_and_collaborations.rb`
+  - `007_add_roles_memberships_and_payments.rb`
 - Seed workflow:
-  - `app/db/seeds/projects_seed.yml`
-  - `app/db/seeds/bid_submissions_seed.yml`
+  - `seeds/202604270001_create_all.rb`
   - `bundle exec rake db:seed`
 - Test suite:
   - `bundle exec rake spec`
-  - Current baseline: 29 runs, 106 assertions, 0 failures
+  - Current baseline: 57 runs, 204 assertions, 0 failures
 
 ### Not Yet Implemented
 
@@ -58,7 +75,7 @@ submissions.
 - **Tests:** Minitest + Rack::Test
 - **Storage model:** Hybrid
   - Bids remain file-based in `app/db/store/`
-  - Projects/bid submissions are relational in SQLite
+  - Accounts/projects/bid submissions/payments are relational in SQLite
 
 ## Development Workflow Rules
 
@@ -91,5 +108,5 @@ bundle exec rake console
 
 ---
 
-**Last Updated:** 2026-04-15  
-**Status:** ORM + seed workflow implemented; security roadmap still active
+**Last Updated:** 2026-04-27  
+**Status:** Role-aware account/project flow + payment placeholder implemented
