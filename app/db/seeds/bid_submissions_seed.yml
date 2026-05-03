@@ -1,0 +1,8 @@
+---
+bid_submissions:
+  - project_title: capstone-marketplace
+    contractor_alias: alpha-freelancer
+    plaintext_bid: "proposal-encrypted-payload-alpha"
+  - project_title: secure-procurement-dashboard
+    contractor_alias: beta-studio
+    plaintext_bid: "proposal-encrypted-payload-beta"
