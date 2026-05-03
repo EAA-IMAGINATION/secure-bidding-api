@@ -20,6 +20,8 @@ require_relative '../services/projects/assign_project_role'
 require_relative '../services/projects/create_bid_for_project'
 require_relative '../services/payments/create_payment'
 require_relative '../services/payments/update_payment'
+require_relative '../services/authenticate_account'
+require_relative 'http_request'
 
 module SecureBidding
   # Rack application for the secure bidding API.
@@ -30,6 +32,7 @@ module SecureBidding
     plugin :json
     plugin :halt
     plugin :all_verbs
+    plugin :multi_route
     plugin :error_handler do |error|
       APP_LOGGER.error("Unhandled error: #{error.class} - #{error.message}")
       raise error
@@ -89,10 +92,37 @@ module SecureBidding
         { message: 'Secure Bidding API v1.0', status: 'ok' }
       end
 
+      # SSL/TLS enforcement
+      unless HttpRequest.new(r).secure?
+        r.halt(403, { error: 'TLS/SSL Required' }.to_json)
+      end
+
       r.on 'api' do
         r.on 'v1' do
           SecureBidding::Services::Roles::EnsureRoles.call
 
+          r.on 'auth' do
+            r.on 'authenticate' do
+              # POST /api/v1/auth/authenticate
+              r.post do
+                credentials = HttpRequest.new(r).body_data
+                auth_account = AuthenticateAccount.call(credentials)
+                {
+                  id: auth_account.id,
+                  username: auth_account.username,
+                  email: auth_account.email,
+                  system_role: auth_account.system_role,
+                  system_roles: auth_account.system_roles.map(&:name)
+                }
+              rescue AuthenticateAccount::UnauthorizedError => e
+                APP_LOGGER.warn("Authentication failed: #{e.message}")
+                r.halt 403, { error: 'Invalid credentials' }.to_json
+              rescue StandardError => e
+                APP_LOGGER.error("Authentication error: #{e.message}")
+                r.halt 500, { error: 'Authentication service error' }.to_json
+              end
+            end
+          end
           r.on 'bids' do
             # POST /api/v1/bids - Create a new bid
             r.post true do
@@ -586,6 +616,7 @@ module SecureBidding
         end
       end
     end
+
     # rubocop:enable Metrics/BlockLength
   end
 end
