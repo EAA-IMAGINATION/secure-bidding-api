@@ -21,6 +21,7 @@ Rake::TestTask.new(:spec) do |t|
   t.warning = false
 end
 
+# rubocop:disable Metrics/BlockLength
 namespace :db do
   desc 'Run Sequel migrations for development and test sqlite databases'
   task :migrate do
@@ -100,6 +101,28 @@ namespace :db do
       "#{SecureBidding::BidSubmission.count} bid submissions in #{env}"
     )
   end
+end
+# rubocop:enable Metrics/BlockLength
+
+desc 'Setup and start the application (install deps, configure, migrate, seed, run server)'
+task :start do
+  puts 'Installing dependencies...'
+  system('bundle install') || exit(1)
+
+  puts 'Configuring secrets...'
+  system('cp config/secrets-example.yml config/secrets.yml') unless File.exist?('config/secrets.yml')
+
+  puts 'Creating store directory...'
+  system('mkdir -p app/db/store')
+
+  puts 'Running migrations...'
+  Rake::Task['db:migrate'].invoke
+
+  puts 'Seeding database...'
+  Rake::Task['db:seed'].invoke
+
+  puts "\n✓ Setup complete. Starting server on http://localhost:9292...\n"
+  system('bundle exec rackup -p 9292')
 end
 
 desc 'Launch pry with application code and models preloaded'

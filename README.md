@@ -6,9 +6,20 @@ Secure Bidding API is a Ruby/Roda service with:
 - Sequel/SQLite-backed accounts, projects, and bid submissions (`app/db/*.db`)
 - role-aware account/project membership and payment placeholders
 
-## Quick Start (copy/paste)
+## Quick Start (one command)
 
 Run from the repository root:
+
+```bash
+bundle exec rake start
+```
+
+This will install dependencies, configure secrets, migrate the database, seed it
+with demo data, and start the server on `http://localhost:9292`.
+
+### Manual Setup (if needed)
+
+Alternatively, run each step separately:
 
 ```bash
 bundle install
@@ -18,8 +29,6 @@ bundle exec rake db:migrate
 bundle exec rake db:seed
 bundle exec rackup -p 9292
 ```
-
-Server is now on `http://localhost:9292`.
 
 ## End-to-End Demo Flow
 
@@ -34,7 +43,10 @@ curl http://localhost:9292/
 Expected:
 
 ```json
-{"message":"Secure Bidding API v1.0","status":"ok"}
+{
+  "message": "Secure Bidding API v1.0",
+  "status": "ok"
+}
 ```
 
 ### 2. Verify seeded account/project/bid/payment metadata
@@ -60,7 +72,7 @@ curl -X POST http://localhost:9292/api/v1/accounts \
 Expected:
 
 ```json
-{"id":"UUID","status":"created"}
+{ "id": "UUID", "status": "created" }
 ```
 
 ### 4. Create a new project
@@ -74,7 +86,7 @@ curl -X POST http://localhost:9292/api/v1/projects \
 Expected:
 
 ```json
-{"id":"UUID","status":"created"}
+{ "id": "UUID", "status": "created" }
 ```
 
 ### 5. Create a bid submission for that project
@@ -90,7 +102,7 @@ curl -X POST http://localhost:9292/api/v1/bid_submissions \
 Expected:
 
 ```json
-{"id":"UUID","status":"created"}
+{ "id": "UUID", "status": "created" }
 ```
 
 ### 6. Verify project-owned bid submission flow
