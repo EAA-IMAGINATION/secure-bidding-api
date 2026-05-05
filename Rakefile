@@ -121,8 +121,8 @@ task :start do
   puts 'Seeding database...'
   Rake::Task['db:seed'].invoke
 
-  puts "\n✓ Setup complete. Starting server on http://localhost:9292...\n"
-  system('bundle exec rackup -p 9292')
+  puts "\n✓ Setup complete. Starting server on http://localhost:3000...\n"
+  system('bundle exec rackup -p 3000')
 end
 
 desc 'Launch pry with application code and models preloaded'

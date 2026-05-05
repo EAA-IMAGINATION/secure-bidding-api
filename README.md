@@ -15,7 +15,7 @@ bundle exec rake start
 ```
 
 This will install dependencies, configure secrets, migrate the database, seed it
-with demo data, and start the server on `http://localhost:9292`.
+with demo data, and start the server on `http://localhost:3000`.
 
 ### Manual Setup (if needed)
 
@@ -27,7 +27,7 @@ cp config/secrets-example.yml config/secrets.yml
 mkdir -p app/db/store
 bundle exec rake db:migrate
 bundle exec rake db:seed
-bundle exec rackup -p 9292
+bundle exec rackup -p 3000
 ```
 
 ## End-to-End Demo Flow
@@ -37,7 +37,7 @@ Use a second terminal for `curl` commands.
 ### 1. Health check
 
 ```bash
-curl http://localhost:9292/
+curl http://localhost:3000/
 ```
 
 Expected:
@@ -52,10 +52,10 @@ Expected:
 ### 2. Verify seeded account/project/bid/payment metadata
 
 ```bash
-curl http://localhost:9292/api/v1/accounts
-curl http://localhost:9292/api/v1/projects
-curl http://localhost:9292/api/v1/bid_submissions
-curl http://localhost:9292/api/v1/payments/PAYMENT_ID
+curl http://localhost:3000/api/v1/accounts
+curl http://localhost:3000/api/v1/projects
+curl http://localhost:3000/api/v1/bid_submissions
+curl http://localhost:3000/api/v1/payments/PAYMENT_ID
 ```
 
 Expected: seeded account/project/bid/payment metadata is returned
@@ -64,7 +64,7 @@ Expected: seeded account/project/bid/payment metadata is returned
 ### 3. Create a new account
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/accounts \
+curl -X POST http://localhost:3000/api/v1/accounts \
   -H "Content-Type: application/json" \
   -d '{"username":"demo-user","password":"demo-pass-123","email":"demo@local.test","phone":"+886900000999","system_role":"member"}'
 ```
@@ -78,7 +78,7 @@ Expected:
 ### 4. Create a new project
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/projects \
+curl -X POST http://localhost:3000/api/v1/projects \
   -H "Content-Type: application/json" \
   -d '{"title":"demo-project","budget_cents":120000}'
 ```
@@ -94,7 +94,7 @@ Expected:
 Replace `PROJECT_ID` with the `id` returned above.
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/bid_submissions \
+curl -X POST http://localhost:3000/api/v1/bid_submissions \
   -H "Content-Type: application/json" \
   -d '{"project_id":"PROJECT_ID","contractor_alias":"demo-freelancer","plaintext_bid":"top-secret"}'
 ```
@@ -108,7 +108,7 @@ Expected:
 ### 6. Verify project-owned bid submission flow
 
 ```bash
-curl http://localhost:9292/api/v1/projects/PROJECT_ID/bid_submissions
+curl http://localhost:3000/api/v1/projects/PROJECT_ID/bid_submissions
 ```
 
 Expected: list includes your `demo-freelancer` entry.
@@ -118,7 +118,7 @@ Expected: list includes your `demo-freelancer` entry.
 Create bid:
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/bids \
+curl -X POST http://localhost:3000/api/v1/bids \
   -H "Content-Type: application/json" \
   -d '{"contractor":"ABC Construction","project_id":"project-123","encrypted_bid":"base64_encrypted_data_here"}'
 ```
@@ -126,8 +126,8 @@ curl -X POST http://localhost:9292/api/v1/bids \
 Then list and fetch by id:
 
 ```bash
-curl http://localhost:9292/api/v1/bids
-curl http://localhost:9292/api/v1/bids/BID_ID
+curl http://localhost:3000/api/v1/bids
+curl http://localhost:3000/api/v1/bids/BID_ID
 ```
 
 ### 8. Role-aware project memberships and project bids
@@ -135,7 +135,7 @@ curl http://localhost:9292/api/v1/bids/BID_ID
 Assign role to account (system scope):
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/accounts/ACCOUNT_ID/system_roles \
+curl -X POST http://localhost:3000/api/v1/accounts/ACCOUNT_ID/system_roles \
   -H "Content-Type: application/json" \
   -d '{"role":"project_owner"}'
 ```
@@ -143,7 +143,7 @@ curl -X POST http://localhost:9292/api/v1/accounts/ACCOUNT_ID/system_roles \
 Assign account to project (project scope):
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/memberships \
+curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/memberships \
   -H "Content-Type: application/json" \
   -d '{"account_id":"ACCOUNT_ID","role":"bidder"}'
 ```
@@ -151,7 +151,7 @@ curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/memberships \
 Create project bid as assigned bidder:
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/bids \
+curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/bids \
   -H "Content-Type: application/json" \
   -d '{"bidder_account_id":"ACCOUNT_ID","contractor_alias":"demo-bidder","plaintext_bid":"top-secret"}'
 ```
@@ -161,7 +161,7 @@ curl -X POST http://localhost:9292/api/v1/projects/PROJECT_ID/bids \
 Create placeholder payment:
 
 ```bash
-curl -X POST http://localhost:9292/api/v1/payments \
+curl -X POST http://localhost:3000/api/v1/payments \
   -H "Content-Type: application/json" \
   -d '{"bid_submission_id":"BID_SUBMISSION_ID","paid":false,"method":"placeholder","reference":"demo-ref"}'
 ```
@@ -169,7 +169,7 @@ curl -X POST http://localhost:9292/api/v1/payments \
 Update paid status:
 
 ```bash
-curl -X PATCH http://localhost:9292/api/v1/payments/PAYMENT_ID \
+curl -X PATCH http://localhost:3000/api/v1/payments/PAYMENT_ID \
   -H "Content-Type: application/json" \
   -d '{"paid":true}'
 ```
