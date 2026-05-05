@@ -135,3 +135,9 @@ task :console do
   puts 'Examples: SecureBidding::Project.all, SecureBidding::BidSubmission.all'
   Pry.start
 end
+
+desc 'Start the API server only (requires db:migrate and db:seed done first)'
+task :server do
+  puts "Starting server on http://localhost:3000..."
+  system('bundle exec rackup -p 3000')
+end
