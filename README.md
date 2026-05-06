@@ -214,11 +214,14 @@ bundle exec rake db:drop
 ## Useful Tasks
 
 ```bash
+bundle exec rake start                    # Full setup and start server
+bundle exec rake server                   # Start server only
 bundle exec rake db:create
 bundle exec rake db:migrate
 bundle exec rake db:seed
 bundle exec rake db:clear
 bundle exec rake db:reset
+bundle exec rake db:drop
 bundle exec rake db:version
 bundle exec rake console
 bundle exec rake spec
