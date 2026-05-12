@@ -9,11 +9,19 @@ module SecureBidding
     module_function
 
     def database_key(env = SecureBidding::Environment.app_env)
+      # Prefer explicit environment variable for runtime secrets (works on Heroku)
+      if ENV.key?('DATABASE_KEY') && !ENV['DATABASE_KEY'].to_s.empty?
+        key = ENV['DATABASE_KEY']
+        raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
+        return key
+      end
+
+      # Fallback to secrets payload files (secrets.yml or example files)
       env_secrets = secrets_payload.fetch(env) do
         raise KeyError, "missing secrets for environment '#{env}'"
       end
 
-      key = ENV.fetch('DATABASE_KEY', env_secrets.fetch('database_key'))
+      key = env_secrets.fetch('database_key')
       raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
 
       key
