@@ -11,6 +11,11 @@ gem 'roda'
 gem 'sequel'
 gem 'sequel-seed'
 gem 'sqlite3'
+
+group :production do
+  # Use pg in production for Heroku Postgres
+  gem 'pg'
+end
 gem 'webrick'
 
 group :development do
