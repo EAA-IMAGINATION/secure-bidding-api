@@ -9,10 +9,14 @@ module SecureBidding
     module_function
 
     def database_key(env = SecureBidding::Environment.app_env)
+      @database_keys ||= {}
+      return @database_keys[env] if @database_keys.key?(env)
+
       # Prefer explicit environment variable for runtime secrets (works on Heroku)
       if ENV.key?('DATABASE_KEY') && !ENV['DATABASE_KEY'].to_s.empty?
-        key = ENV['DATABASE_KEY']
+        key = ENV.delete('DATABASE_KEY')
         raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
+        @database_keys[env] = key
         return key
       end
 
@@ -24,6 +28,7 @@ module SecureBidding
       key = env_secrets.fetch('database_key')
       raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
 
+      @database_keys[env] = key
       key
     end
 

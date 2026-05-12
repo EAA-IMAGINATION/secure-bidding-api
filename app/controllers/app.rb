@@ -33,9 +33,15 @@ module SecureBidding
     plugin :halt
     plugin :all_verbs
     plugin :multi_route
+    plugin :environments
     plugin :error_handler do |error|
       APP_LOGGER.error("Unhandled error: #{error.class} - #{error.message}")
       raise error
+    end
+
+    configure :production do
+      plugin :redirect_http_to_https
+      plugin :hsts
     end
 
     def parse_json_request_body
@@ -87,14 +93,14 @@ module SecureBidding
 
     # rubocop:disable Metrics/BlockLength
     route do |r|
+      # SSL/TLS enforcement
+      unless HttpRequest.new(r).secure?
+        r.halt(403, { message: 'TLS/SSL Required' }.to_json)
+      end
+
       # Root route - health check
       r.root do
         { message: 'Secure Bidding API v1.0', status: 'ok' }
-      end
-
-      # SSL/TLS enforcement
-      unless HttpRequest.new(r).secure?
-        r.halt(403, { error: 'TLS/SSL Required' }.to_json)
       end
 
       r.on 'api' do
