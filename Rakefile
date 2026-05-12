@@ -143,9 +143,9 @@ task :server do
 end
 
 namespace :db do
-  # Promote an existing account to system_admin role.
+  # Promote an existing account to admin role.
   # Usage: USERNAME=jdoe rake db:bootstrap_admin OR EMAIL=joe@example.com rake db:bootstrap_admin
-  desc 'Promote an account to system_admin'
+  desc 'Promote an account to admin'
   task :bootstrap_admin do
     require_relative 'app/require_app'
     env = SecureBidding::Database.environment
@@ -167,10 +167,10 @@ namespace :db do
       exit 1
     end
 
-    result = SecureBidding::Services::Roles::AssignSystemRole.call(account_id: account.id, role_name: 'system_admin')
+    result = SecureBidding::Services::Accounts::UpdateAccount.call(account, system_role: 'admin')
 
     if result.is_a?(Hash) && result[:ok]
-      puts "Assigned role #{result[:role]} to account #{account.username} (#{account.id})"
+      puts "Assigned system_role admin to account #{account.username} (#{account.id})"
     else
       puts "Failed to assign role: #{result[:error] || 'unknown error'}"
       exit 1
