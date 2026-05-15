@@ -12,24 +12,28 @@ module SecureBidding
       @database_keys ||= {}
       return @database_keys[env] if @database_keys.key?(env)
 
-      # Prefer explicit environment variable for runtime secrets (works on Heroku)
-      if ENV.key?('DATABASE_KEY') && !ENV['DATABASE_KEY'].to_s.empty?
-        key = ENV.delete('DATABASE_KEY')
-        raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
-        @database_keys[env] = key
-        return key
-      end
+      key = runtime_database_key || file_database_key(env)
+      validate_database_key!(key)
 
-      # Fallback to secrets payload files (secrets.yml or example files)
+      @database_keys[env] = key
+    end
+
+    def runtime_database_key
+      return nil unless ENV.key?('DATABASE_KEY') && !ENV['DATABASE_KEY'].to_s.empty?
+
+      ENV.delete('DATABASE_KEY')
+    end
+
+    def file_database_key(env)
       env_secrets = secrets_payload.fetch(env) do
         raise KeyError, "missing secrets for environment '#{env}'"
       end
 
-      key = env_secrets.fetch('database_key')
-      raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
+      env_secrets.fetch('database_key')
+    end
 
-      @database_keys[env] = key
-      key
+    def validate_database_key!(key)
+      raise ArgumentError, 'database_key must be exactly 32 bytes' unless key.to_s.b.bytesize == 32
     end
 
     def secrets_payload
