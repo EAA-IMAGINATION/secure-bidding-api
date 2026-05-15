@@ -142,36 +142,40 @@ task :server do
   system('bundle exec rackup -p 3000')
 end
 
-# Promote an existing account to system_admin role.
-# Usage: USERNAME=jdoe rake db:bootstrap_admin OR EMAIL=joe@example.com rake db:bootstrap_admin
-desc 'Promote an account to system_admin'
-task :bootstrap_admin do
-  require_relative 'app/require_app'
-  env = SecureBidding::Database.environment
-  SecureBidding::Database.connect!(env)
+namespace :db do
+  # Promote an existing account to admin role.
+  # Usage: USERNAME=jdoe rake db:bootstrap_admin OR EMAIL=joe@example.com rake db:bootstrap_admin
+  desc 'Promote an account to admin'
+  task :bootstrap_admin do
+    require_relative 'app/require_app'
+    env = SecureBidding::Database.environment
+    SecureBidding::Database.connect!(env)
 
-  username = ENV['USERNAME']
-  email = ENV['EMAIL']
+    username = ENV['USERNAME']
+    email = ENV['EMAIL']
 
-  account = if username && !username.strip.empty?
-              SecureBidding::Account.first(username: username.strip)
-            elsif email && !email.strip.empty?
-              SecureBidding::Account.first(email_hash: SecureBidding::Account.search_hash(email.strip))
-            else
-              abort 'Provide USERNAME or EMAIL env var, e.g., USERNAME=jdoe rake db:bootstrap_admin'
-            end
+    account = if username && !username.strip.empty?
+                SecureBidding::Account.first(username: username.strip)
+              elsif email && !email.strip.empty?
+                SecureBidding::Account.first(email_hash: SecureBidding::Account.search_hash(email.strip))
+              else
+                abort 'Provide USERNAME or EMAIL env var, e.g., USERNAME=jdoe rake db:bootstrap_admin'
+              end
 
-  if account.nil?
-    puts 'Account not found'
-    exit 1
-  end
+    if account.nil?
+      puts 'Account not found'
+      exit 1
+    end
 
-  result = SecureBidding::Services::Roles::AssignSystemRole.call(account_id: account.id, role_name: 'system_admin')
+    result = SecureBidding::Services::Accounts::UpdateAccount.call(account, system_role: 'admin')
 
-  if result.is_a?(Hash) && result[:ok]
-    puts "Assigned role #{result[:role]} to account #{account.username} (#{account.id})"
-  else
-    puts "Failed to assign role: #{result[:error] || 'unknown error'}"
-    exit 1
+    if result.is_a?(Hash) && result[:ok]
+      puts "Assigned system_role admin to account #{account.username} (#{account.id})"
+    else
+      puts "Failed to assign role: #{result[:error] || 'unknown error'}"
+      exit 1
+    end
   end
 end
+
+task bootstrap_admin: 'db:bootstrap_admin'

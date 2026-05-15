@@ -15,6 +15,7 @@ gem 'sqlite3'
 group :production do
   # Use pg in production for Heroku Postgres
   gem 'pg'
+  gem 'puma'
 end
 gem 'webrick'
 

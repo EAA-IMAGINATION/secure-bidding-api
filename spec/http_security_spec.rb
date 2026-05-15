@@ -33,6 +33,22 @@ describe 'API SSL/TLS Enforcement' do
     end
   end
 
+  describe 'SAD: HTTP requests blocked in production' do
+    it 'returns JSON 403 for insecure production requests' do
+      original_env = ENV['RACK_ENV']
+      ENV['RACK_ENV'] = 'production'
+
+      get '/'
+
+      _(last_response.status).must_equal 403
+
+      response_body = JSON.parse(last_response.body)
+      _(response_body['message']).must_equal 'TLS/SSL Required'
+    ensure
+      ENV['RACK_ENV'] = original_env
+    end
+  end
+
   describe 'Unit tests for HttpRequest security check' do
     it 'HttpRequest secure? returns true in test mode' do
       # Create a mock Roda routing object with HTTP scheme
