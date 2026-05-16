@@ -104,6 +104,16 @@ module SecureBidding
         r.halt(403, { message: 'TLS/SSL Required' }.to_json)
       end
 
+      # Authentication middleware - extract and validate Bearer token
+      http_request = HttpRequest.new(r)
+      begin
+        @auth_account = http_request.authenticated_account
+      rescue InvalidTokenError
+        r.halt(403, { message: 'Invalid auth token' }.to_json)
+      rescue ExpiredTokenError
+        r.halt(403, { message: 'Expired auth token' }.to_json)
+      end
+
       # Root route - health check
       r.root do
         { message: 'Secure Bidding API v1.0', status: 'ok' }
