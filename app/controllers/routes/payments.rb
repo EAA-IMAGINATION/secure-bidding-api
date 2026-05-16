@@ -2,67 +2,80 @@
 
 module SecureBidding
   module Routes
+    # Handles payments endpoints and responses.
     module Payments
-      def self.call(r, app)
-        r.on 'payments' do
-          r.post true do
-            data = app.parse_json_request_body
-            if app.response.status == 400
-              data
-            else
-              result = SecureBidding::Services::Payments::CreatePayment.call(data)
-              if result[:ok]
-                app.response.status = 201
-                app.payment_response(result[:payment])
-              else
-                app.response.status = result[:status]
-                { error: result[:error] }
-              end
-            end
+      def self.call(req, app)
+        req.on 'payments' do
+          handle_payments(req, app)
+        end
+      end
+
+      def self.handle_payments(req, app)
+        req.post true do
+          create_payment(req, app)
+        end
+
+        req.on String do |id|
+          req.get true do
+            get_payment(req, app, id)
           end
 
-          r.on String do |id|
-            r.get true do
-              unless app.valid_uuid?(id)
-                app.response.status = 404
-                next { error: 'Payment not found' }
-              end
-
-              payment = Payment[id]
-              if payment
-                app.payment_response(payment)
-              else
-                app.response.status = 404
-                { error: 'Payment not found' }
-              end
-            end
-
-            r.patch true do
-              unless app.valid_uuid?(id)
-                app.response.status = 404
-                next { error: 'Payment not found' }
-              end
-
-              payment = Payment[id]
-              if payment.nil?
-                app.response.status = 404
-                { error: 'Payment not found' }
-              else
-                data = app.parse_json_request_body
-                if app.response.status == 400
-                  data
-                else
-                  result = SecureBidding::Services::Payments::UpdatePayment.call(payment: payment, payload: data)
-                  if result[:ok]
-                    app.payment_response(result[:payment])
-                  else
-                    app.response.status = result[:status]
-                    { error: result[:error] }
-                  end
-                end
-              end
-            end
+          req.patch true do
+            update_payment(req, app, id)
           end
+        end
+      end
+
+      def self.create_payment(_req, app)
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        result = SecureBidding::Services::Payments::CreatePayment.call(data)
+        if result[:ok]
+          app.response.status = 201
+          app.payment_response(result[:payment])
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
+        end
+      end
+
+      def self.get_payment(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Payment not found' }
+        end
+
+        payment = Payment[id]
+        if payment
+          app.payment_response(payment)
+        else
+          app.response.status = 404
+          { error: 'Payment not found' }
+        end
+      end
+
+      def self.update_payment(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Payment not found' }
+        end
+
+        payment = Payment[id]
+        if payment.nil?
+          app.response.status = 404
+          return { error: 'Payment not found' }
+        end
+
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        result = SecureBidding::Services::Payments::UpdatePayment.call(payment: payment, payload: data)
+        if result[:ok]
+          app.payment_response(result[:payment])
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
         end
       end
     end
