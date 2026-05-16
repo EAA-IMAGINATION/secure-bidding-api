@@ -73,8 +73,38 @@ module SecureBidding
       SearchHash.digest(value)
     end
 
+    def self.email_available?(email)
+      email_hash = search_hash(email)
+      where(email_hash: email_hash).count.zero?
+    end
+
+    def self.username_available?(username)
+      where(username: username).count.zero?
+    end
+
     def system_role?(role_name)
       system_roles_dataset.where(name: role_name).count.positive?
+    end
+
+    def self.by_registration_token(token_string)
+      account_payload = SecureBidding::AuthToken.load(token_string).payload
+      self[account_payload[:account_id]]
+    rescue SecureBidding::InvalidTokenError, SecureBidding::ExpiredTokenError => e
+      raise e
+    end
+
+    def set_registration_token(expiration = SecureBidding::AuthToken::ONE_HOUR)
+      token = SecureBidding::AuthToken.new(
+        { account_id: id },
+        expiration
+      )
+      self.registration_token = token.to_s
+      self.registration_token_expires_at = Time.now + expiration
+    end
+
+    def verify_email!
+      self.email_verified_at = Time.now
+      save
     end
   end
 end
