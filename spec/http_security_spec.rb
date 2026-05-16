@@ -52,8 +52,10 @@ describe 'API SSL/TLS Enforcement' do
   describe 'Unit tests for HttpRequest security check' do
     it 'HttpRequest secure? returns true in test mode' do
       # Create a mock Roda routing object with HTTP scheme
-      mock_routing = Minitest::Mock.new
-      mock_routing.expect(:scheme, 'http')
+      mock_routing = Object.new
+      def mock_routing.scheme
+        'http'
+      end
 
       http_req = SecureBidding::HttpRequest.new(mock_routing)
       # In test mode, secure? should return true even with http scheme
@@ -61,12 +63,136 @@ describe 'API SSL/TLS Enforcement' do
     end
 
     it 'HttpRequest secure? returns true for HTTPS scheme in any mode' do
-      mock_routing = Minitest::Mock.new
-      mock_routing.expect(:scheme, 'https')
+      mock_routing = Object.new
+      def mock_routing.scheme
+        'https'
+      end
 
       http_req = SecureBidding::HttpRequest.new(mock_routing)
       # HTTPS should always be considered secure
       _(http_req.secure?).must_equal true
+    end
+  end
+
+  describe 'authenticated_account method (Bearer token parsing)' do
+    let(:payload_data) { { user_id: '123', username: 'testuser', role: 'member' } }
+
+    let(:payload_data) { { user_id: '123', username: 'testuser', role: 'member' } }
+
+    it 'returns nil when Authorization header is absent' do
+      mock_routing = Object.new
+      def mock_routing.env
+        {}
+      end
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      _(http_req.authenticated_account).must_be_nil
+    end
+
+    it 'returns nil when Authorization header is empty' do
+      mock_routing = Object.new
+      def mock_routing.env
+        { 'HTTP_AUTHORIZATION' => nil }
+      end
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      _(http_req.authenticated_account).must_be_nil
+    end
+
+    it 'returns nil when Authorization header has no space separator' do
+      mock_routing = Object.new
+      def mock_routing.env
+        { 'HTTP_AUTHORIZATION' => 'InvalidFormat' }
+      end
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      _(http_req.authenticated_account).must_be_nil
+    end
+
+    it 'returns nil when Authorization scheme is not Bearer' do
+      mock_routing = Object.new
+      def mock_routing.env
+        { 'HTTP_AUTHORIZATION' => 'Basic sometoken' }
+      end
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      _(http_req.authenticated_account).must_be_nil
+    end
+
+    it 'returns payload with valid Bearer token' do
+      # Create a valid token
+      SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+      token = SecureBidding::AuthToken.tokenize(payload_data)
+
+      mock_routing = Object.new
+      env = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+      define_method_on_object(mock_routing, :env, env)
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      payload = http_req.authenticated_account
+
+      _(payload[:user_id]).must_equal '123'
+      _(payload[:username]).must_equal 'testuser'
+      _(payload[:role]).must_equal 'member'
+    end
+
+    it 'handles case-insensitive Bearer scheme (bearer)' do
+      SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+      token = SecureBidding::AuthToken.tokenize(payload_data)
+
+      mock_routing = Object.new
+      env = { 'HTTP_AUTHORIZATION' => "bearer #{token}" }
+      define_method_on_object(mock_routing, :env, env)
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      payload = http_req.authenticated_account
+
+      _(payload[:user_id]).must_equal '123'
+    end
+
+    it 'handles case-insensitive Bearer scheme (BEARER)' do
+      SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+      token = SecureBidding::AuthToken.tokenize(payload_data)
+
+      mock_routing = Object.new
+      env = { 'HTTP_AUTHORIZATION' => "BEARER #{token}" }
+      define_method_on_object(mock_routing, :env, env)
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+      payload = http_req.authenticated_account
+
+      _(payload[:user_id]).must_equal '123'
+    end
+
+    it 'raises InvalidTokenError for malformed token' do
+      mock_routing = Object.new
+      def mock_routing.env
+        { 'HTTP_AUTHORIZATION' => 'Bearer invalidtoken123' }
+      end
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+
+      _(proc { http_req.authenticated_account }).must_raise SecureBidding::InvalidTokenError
+    end
+
+    it 'raises ExpiredTokenError for expired token' do
+      SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+      # Create a token that expires in -1 second (already expired)
+      token = SecureBidding::AuthToken.tokenize(payload_data, -1)
+
+      mock_routing = Object.new
+      env = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+      define_method_on_object(mock_routing, :env, env)
+
+      http_req = SecureBidding::HttpRequest.new(mock_routing)
+
+      _(proc { http_req.authenticated_account }).must_raise SecureBidding::ExpiredTokenError
+    end
+
+    private
+
+    def define_method_on_object(obj, method_name, return_value)
+      obj.define_singleton_method(method_name) { return_value }
     end
   end
 
