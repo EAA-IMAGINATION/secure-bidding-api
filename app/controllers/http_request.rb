@@ -19,5 +19,17 @@ module SecureBidding
       raw = @routing.body.read
       raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)
     end
+
+    def authenticated_account
+      header = @routing.env['HTTP_AUTHORIZATION']
+      return nil if header.nil?
+
+      scheme, token = header.split(' ', 2)
+      return nil if scheme.nil? || token.nil?
+      return nil unless scheme.casecmp('bearer').zero?
+
+      auth_token = AuthToken.load(token)
+      auth_token.payload
+    end
   end
 end
