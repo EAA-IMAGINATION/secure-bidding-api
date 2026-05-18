@@ -90,6 +90,7 @@ module SecureBidding
           )
         rescue SecureBidding::Services::Email::SendVerification::MailtrapError => e
           app.class::APP_LOGGER.error("Email service error: #{e.message}")
+          account.delete
           return req.halt(500, { error: 'Failed to send verification email' }.to_json)
         end
 
