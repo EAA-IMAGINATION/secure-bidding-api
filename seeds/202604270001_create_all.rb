@@ -6,14 +6,14 @@ Sequel.seed(:development) do
   def run
     SecureBidding::Services::Roles::EnsureRoles.call
 
+    SecureBidding::Services::Accounts::ResetAccounts.call(
+      username: 'scifithedev',
+      password: 'President@1958',
+      email: 'scifithedev@gmail.com',
+      system_role: 'admin'
+    )
+
     account_specs = [
-      {
-        username: 'demo-system-admin',
-        password: 'admin-pass-123',
-        email: 'admin@secure-bidding.local',
-        phone: '+886900100001',
-        system_role: 'system_admin'
-      },
       {
         username: 'demo-project-owner',
         password: 'owner-pass-123',
@@ -31,14 +31,10 @@ Sequel.seed(:development) do
     ]
 
     created_accounts = account_specs.map do |spec|
-      account = SecureBidding::Account.first(username: spec[:username])
-      if account.nil?
-        result = SecureBidding::Services::Accounts::CreateAccount.call(spec)
-        raise "Account seed failed for #{spec[:username]}: #{result[:error]}" unless result[:ok]
+      result = SecureBidding::Services::Accounts::CreateAccount.call(spec)
+      raise "Account seed failed for #{spec[:username]}: #{result[:error]}" unless result[:ok]
 
-        account = result[:account]
-      end
-      account
+      result[:account]
     end
 
     projects = [
@@ -49,13 +45,11 @@ Sequel.seed(:development) do
         SecureBidding::Project.create(project_spec)
     end
 
-    system_admin = created_accounts.find { |account| account.username == 'demo-system-admin' }
     owner = created_accounts.find { |account| account.username == 'demo-project-owner' }
     bidder = created_accounts.find { |account| account.username == 'demo-bidder' }
     alpha_project = projects.find { |project| project.title == 'seed-project-alpha' }
     beta_project = projects.find { |project| project.title == 'seed-project-beta' }
 
-    SecureBidding::Services::Roles::AssignSystemRole.call(account_id: system_admin.id, role_name: 'system_admin')
     SecureBidding::Services::Roles::AssignSystemRole.call(account_id: owner.id, role_name: 'project_owner')
     SecureBidding::Services::Roles::AssignSystemRole.call(account_id: bidder.id, role_name: 'bidder')
 
