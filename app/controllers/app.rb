@@ -99,6 +99,17 @@ module SecureBidding
 
     # rubocop:disable Metrics/BlockLength
     route do |r|
+      # CORS headers for cross-origin requests
+      r.response.headers["Access-Control-Allow-Origin"] = ENV.fetch("CORS_ORIGIN", "*")
+      r.response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
+      r.response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
+      r.response.headers["Access-Control-Allow-Credentials"] = "true"
+
+      # Handle preflight requests
+      if r.request_method == "OPTIONS"
+        return r.response.write ""
+      end
+
       # SSL/TLS enforcement
       unless HttpRequest.new(r).secure?
         r.halt(403, { message: 'TLS/SSL Required' }.to_json)
