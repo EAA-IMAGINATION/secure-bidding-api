@@ -6,7 +6,7 @@ module SecureBidding
       # Creates account resources with secured credentials and PII fields.
       class CreateAccount
         # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
-        ALLOWED_KEYS = %w[username password email phone system_role].freeze
+        ALLOWED_KEYS = %w[username password email phone system_role verification_token].freeze
 
         def self.call(payload)
           new(payload).call
