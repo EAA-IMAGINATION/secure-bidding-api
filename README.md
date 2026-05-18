@@ -16,6 +16,7 @@ bundle exec rake start
 
 This will install dependencies, configure secrets, migrate the database, seed it
 with demo data, and start the server on `http://localhost:3000`.
+The seeded admin account is `scifithedev`.
 
 ### Manual Setup (if needed)
 
