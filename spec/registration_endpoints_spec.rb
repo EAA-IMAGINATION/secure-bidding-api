@@ -201,6 +201,33 @@ describe 'API /api/v1/auth registration endpoints' do
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_include 'email'
     end
+
+    it 'SAD: deletes account if email service fails' do
+      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
+        .to_return(status: 500, body: 'Internal Server Error')
+
+      post '/api/v1/auth/register',
+           JSON.generate({ username: 'failmail', email: 'failmail@example.com' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 500
+
+      # Verify account was deleted (not in database)
+      account = SecureBidding::Account.where(username: 'failmail').first
+      _(account).must_be_nil
+
+      # Verify user can retry registration after email failure
+      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
+        .to_return(status: 200, body: JSON.generate({ ok: true }))
+
+      post '/api/v1/auth/register',
+           JSON.generate({ username: 'failmail', email: 'failmail@example.com' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['account_id']).wont_be_nil
+    end
   end
 
   # POST /api/v1/auth/verify tests
