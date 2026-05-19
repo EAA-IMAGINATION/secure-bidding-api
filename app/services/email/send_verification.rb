@@ -36,6 +36,9 @@ module SecureBidding
           SecureBidding::Services::Email::SendVerification.last_payloads ||= []
           SecureBidding::Services::Email::SendVerification.last_payloads << payload
 
+          $stdout.puts "DEBUG: Sending verification email to: #{payload[:to]&.first&.dig(:email)} from: #{payload[:from][:email]}"
+          $stdout.flush
+
           if mailer_togo_smtp?
             send_to_smtp(payload)
           else
