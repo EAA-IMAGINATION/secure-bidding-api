@@ -73,7 +73,7 @@ module SecureBidding
         end
 
         def build_html_template
-          verification_link = "#{verification_url}?token=#{registration_token}"
+          verification_link = verification_url
 
           <<~HTML
             <!DOCTYPE html>
