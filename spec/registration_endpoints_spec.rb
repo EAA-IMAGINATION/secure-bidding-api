@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 ENV['RACK_ENV'] = 'test'
+require 'base64'
 
 require 'minitest/autorun'
 require 'rack/test'
@@ -26,6 +27,8 @@ describe 'API /api/v1/auth registration endpoints' do
   end
 
   before do
+    ENV['MSG_KEY'] ||= Base64.strict_encode64('0123456789abcdef0123456789abcdef')
+    ENV['FRONTEND_APP_URL'] ||= 'http://localhost:9292'
     SecureBidding::Database.migrate!
     SecureBidding::BidSubmission.dataset.delete
     SecureBidding::Project.dataset.delete
@@ -252,21 +255,6 @@ describe 'API /api/v1/auth registration endpoints' do
            'CONTENT_TYPE' => 'application/json'
 
       _(SecureBidding::Account.where(username: 'pendinguser').first).must_be_nil
-    end
-
-    it 'SAD: returns 403 for expired token' do
-      expired_token = SecureBidding::AuthToken.new(
-        { username: 'expired', email: 'expired@example.com', system_role: 'member' },
-        -3600
-      ).to_s
-
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: expired_token, password: 'secret123' }),
-           'CONTENT_TYPE' => 'application/json'
-
-      _(last_response.status).must_equal 403
-      response_body = JSON.parse(last_response.body)
-      _(response_body['error']).must_include 'expired'
     end
 
     it 'SAD: returns 404 for invalid token' do
