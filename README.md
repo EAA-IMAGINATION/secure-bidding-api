@@ -35,6 +35,8 @@ bundle exec rackup -p 3000
 
 The registration flow sends verification emails through Mailer To Go SMTP when
 `MAILERTOGO_URL` or the `MAILERTOGO_SMTP_*` variables are configured.
+Set `FRONTEND_APP_URL` so verification links point at the frontend
+confirmation form.
 
 Example:
 
