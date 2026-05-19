@@ -91,7 +91,6 @@ module SecureBidding
                 </p>
                 <p>If the button above doesn't work, copy and paste this link into your browser:</p>
                 <p>#{ERB::Util.html_escape(verification_link)}</p>
-                <p>This link will expire in 1 hour.</p>
                 <p>If you didn't create this account, please ignore this email.</p>
               </body>
             </html>

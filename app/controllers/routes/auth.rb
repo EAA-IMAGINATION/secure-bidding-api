@@ -101,9 +101,8 @@ module SecureBidding
         return req.halt(400, { error: 'password is required' }.to_json) if data[:password].to_s.strip.empty?
 
         begin
-          registration_payload = SecureBidding::AuthToken.load(registration_token).payload
-        rescue SecureBidding::ExpiredTokenError
-          return req.halt(403, { error: 'Token has expired' }.to_json)
+          registration = SecureBidding::RegistrationToken.new
+          registration_payload = registration.decode(registration_token)
         rescue SecureBidding::InvalidTokenError
           return req.halt(404, { error: 'Invalid token' }.to_json)
         rescue StandardError => e
@@ -111,8 +110,8 @@ module SecureBidding
           return req.halt(404, { error: 'Account not found' }.to_json)
         end
 
-        username = registration_payload[:username].to_s.strip
-        email = registration_payload[:email].to_s.strip
+        username = registration_payload['username'].to_s.strip
+        email = registration_payload['email'].to_s.strip
         password = data[:password].to_s
 
         if username.empty? || email.empty?
@@ -127,7 +126,7 @@ module SecureBidding
         SecureBidding::Account.db.transaction(rollback: :reraise) do
           account = SecureBidding::Account.new(
             username: username,
-            system_role: registration_payload[:system_role].to_s.empty? ? 'member' : registration_payload[:system_role]
+            system_role: 'member'
           )
           account.set_email(email)
           account.set_password(password)
@@ -171,14 +170,7 @@ module SecureBidding
       end
 
       def self.build_registration_token(username:, email:)
-        SecureBidding::AuthToken.tokenize(
-          {
-            username: username,
-            email: email,
-            system_role: 'member'
-          },
-          SecureBidding::AuthToken::ONE_HOUR
-        )
+        SecureBidding::RegistrationToken.new.generate(username: username, email: email)
       end
 
       def self.log_and_halt_invalid_credentials(app, req, err)

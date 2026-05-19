@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 ENV['RACK_ENV'] = 'test'
+require 'base64'
 
 require 'minitest/autorun'
 require 'rack/test'
@@ -37,6 +38,8 @@ describe 'Webmock integration for email API calls' do
   end
 
   before do
+    ENV['MSG_KEY'] ||= Base64.strict_encode64('0123456789abcdef0123456789abcdef')
+    ENV['FRONTEND_APP_URL'] ||= 'http://localhost:9292'
     SecureBidding::Database.migrate!
     SecureBidding::BidSubmission.dataset.delete
     SecureBidding::Project.dataset.delete
