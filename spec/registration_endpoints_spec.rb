@@ -228,6 +228,19 @@ describe 'API /api/v1/auth registration endpoints' do
       response_body = JSON.parse(last_response.body)
       _(response_body['account_id']).wont_be_nil
     end
+
+    it 'SAD: does not persist account when Mailtrap returns 400' do
+      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
+        .to_return(status: 400, body: 'Bad Request')
+
+      post '/api/v1/auth/register',
+           JSON.generate({ username: 'badrequestuser', email: 'badrequest@example.com' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 500
+      account = SecureBidding::Account.where(username: 'badrequestuser').first
+      _(account).must_be_nil
+    end
   end
 
   # POST /api/v1/auth/verify tests

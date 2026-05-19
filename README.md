@@ -31,6 +31,23 @@ bundle exec rake db:seed
 bundle exec rackup -p 3000
 ```
 
+### Email delivery
+
+The registration flow sends verification emails through Mailer To Go SMTP when
+`MAILERTOGO_URL` or the `MAILERTOGO_SMTP_*` variables are configured.
+
+Example:
+
+```yaml
+MAILERTOGO_URL: "smtp://USER:PASSWORD@smtp.us-west-1.mailertogo.net:587?authentication=plain"
+MAILERTOGO_SMTP_HOST: "smtp.us-west-1.mailertogo.net"
+MAILERTOGO_SMTP_PORT: "587"
+MAILERTOGO_SMTP_USER: "USER"
+MAILERTOGO_SMTP_PASSWORD: "PASSWORD"
+MAILERTOGO_FROM_EMAIL: "securebidfreelanceprocurementh@gmail.com"
+MAILERTOGO_FROM_NAME: "Secure Bidding API"
+```
+
 ## End-to-End Demo Flow
 
 Use a second terminal for `curl` commands.

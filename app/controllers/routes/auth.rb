@@ -70,36 +70,34 @@ module SecureBidding
           return req.halt(422, { error: 'email already taken' }.to_json)
         end
 
-        account = SecureBidding::Account.new(username: username, system_role: 'member')
-        account.set_email(email)
-        # Set a temporary password - will be replaced on first login with password reset
-        account.set_password(SecureRandom.random_bytes(32).to_s)
-        account.save
+        SecureBidding::Account.db.transaction(rollback: :reraise) do
+          account = SecureBidding::Account.new(username: username, system_role: 'member')
+          account.set_email(email)
+          # Set a temporary password - will be replaced on first login with password reset
+          account.set_password(SecureRandom.random_bytes(32).to_s)
+          account.save
 
-        # Now that account is saved with an ID, set the registration token
-        account.set_registration_token(SecureBidding::AuthToken::ONE_HOUR)
-        account.save
+          # Now that account is saved with an ID, set the registration token
+          account.set_registration_token(SecureBidding::AuthToken::ONE_HOUR)
+          account.save
 
-        verification_url = build_verification_url(app, req)
-        
-        begin
+          verification_url = build_verification_url(app, req)
           SecureBidding::Services::Email::SendVerification.call(
             account: account,
             registration_token: account.registration_token,
             verification_url: verification_url
           )
-        rescue SecureBidding::Services::Email::SendVerification::MailtrapError => e
-          app.class::APP_LOGGER.error("Email service error: #{e.message}")
-          account.delete
-          return req.halt(500, { error: 'Failed to send verification email' }.to_json)
-        end
 
-        {
-          message: 'Check your email to verify your account',
-          account_id: account.id
-        }
+          {
+            message: 'Check your email to verify your account',
+            account_id: account.id
+          }
+        end
       rescue Sequel::UniqueConstraintViolation
         req.halt 422, { error: 'Account data already exists' }.to_json
+      rescue SecureBidding::Services::Email::SendVerification::MailtrapError => e
+        app.class::APP_LOGGER.error("Email service error: #{e.message}")
+        req.halt 500, { error: 'Failed to send verification email' }.to_json
       rescue StandardError => e
         app.class::APP_LOGGER.error("Registration error: #{e.message}")
         req.halt 400, { error: 'Invalid request' }.to_json
@@ -172,4 +170,3 @@ module SecureBidding
     end
   end
 end
-
