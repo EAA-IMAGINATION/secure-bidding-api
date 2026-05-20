@@ -188,4 +188,126 @@ describe 'API /api/v1/projects' do
 
     _(last_response.status).must_equal 404
   end
+
+
+  it 'HAPPY: admin can update a project with PATCH /api/v1/projects/:id' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    admin = create_account(username: 'admin-user', email: 'admin@example.com')
+    admin.system_role = 'admin'
+    admin.save
+
+    project = SecureBidding::Project.create(title: 'original-project', budget_cents: 50_000, state: 'saved')
+
+    headers = auth_header_for(admin)
+
+    patch "/api/v1/projects/#{project.id}",
+          { title: 'updated-project', budget_cents: 75_000 }.to_json,
+          headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['id']).must_equal project.id
+    _(response_body['status']).must_equal 'updated'
+
+    updated = SecureBidding::Project[project.id]
+    _(updated.title).must_equal 'updated-project'
+    _(updated.budget_cents).must_equal 75_000
+  end
+
+  it 'HAPPY: admin can delete a project with DELETE /api/v1/projects/:id' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    admin = create_account(username: 'admin-user-delete', email: 'admin-delete@example.com')
+    admin.system_role = 'admin'
+    admin.save
+
+    project = SecureBidding::Project.create(title: 'delete-project', budget_cents: 50_000, state: 'published')
+
+    headers = auth_header_for(admin)
+
+    delete "/api/v1/projects/#{project.id}", '', headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['id']).must_equal project.id
+    _(response_body['status']).must_equal 'deleted'
+    _(SecureBidding::Project[project.id]).must_be_nil
+  end
+
+  it 'SAD: non-admin cannot update a project' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    member = create_account(username: 'member-user', email: 'member@example.com')
+    project = SecureBidding::Project.create(title: 'protected-project', budget_cents: 50_000, state: 'saved')
+
+    headers = auth_header_for(member)
+
+    patch "/api/v1/projects/#{project.id}",
+          { title: 'hacked-project' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).wont_be_nil
+    
+    _(SecureBidding::Project[project.id].title).must_equal 'protected-project'
+  end
+
+  it 'SAD: non-admin cannot delete a project' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    member = create_account(username: 'member-user-delete', email: 'member-delete@example.com')
+    project = SecureBidding::Project.create(title: 'protected-project-2', budget_cents: 50_000, state: 'published')
+
+    headers = auth_header_for(member)
+
+    delete "/api/v1/projects/#{project.id}", '', headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).wont_be_nil
+    
+    _(SecureBidding::Project[project.id]).wont_be_nil
+  end
+
+  it 'SAD: rejects project update with invalid state' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    admin = create_account(username: 'admin-validate', email: 'admin-validate@example.com')
+    admin.system_role = 'admin'
+    admin.save
+
+    project = SecureBidding::Project.create(title: 'validate-project', budget_cents: 50_000, state: 'saved')
+
+    headers = auth_header_for(admin)
+
+    patch "/api/v1/projects/#{project.id}",
+          { state: 'archived' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_include "state must be 'saved' or 'published'"
+  end
+
+  it 'SAD: rejects project update with invalid budget_cents' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+    
+    admin = create_account(username: 'admin-budget', email: 'admin-budget@example.com')
+    admin.system_role = 'admin'
+    admin.save
+
+    project = SecureBidding::Project.create(title: 'budget-project', budget_cents: 50_000, state: 'saved')
+
+    headers = auth_header_for(admin)
+
+    patch "/api/v1/projects/#{project.id}",
+          { budget_cents: 'invalid' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_include 'budget_cents must be a non-negative integer'
+  end
 end

@@ -40,6 +40,14 @@ module SecureBidding
             get_project(req, app, id)
           end
 
+          req.patch true do
+            update_project(req, app, id)
+          end
+
+          req.delete true do
+            delete_project(req, app, id)
+          end
+
           req.on 'bid_submissions' do
             req.get true do
               list_project_bid_submissions(req, app, id)
@@ -212,6 +220,75 @@ module SecureBidding
         else
           app.response.status = 404
           { error: 'Project not found' }
+        end
+      end
+
+      def self.update_project(_req, app, id)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can update projects' }
+        end
+
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        return { error: 'Project not found' } if project.nil?
+
+        begin
+          update_data = app.parse_json_request_body
+          return update_data if app.response.status == 400
+
+          if update_data.key?('state') && !Project::VALID_STATES.include?(update_data['state'])
+            app.response.status = 400
+            return { error: "state must be 'saved' or 'published'" }
+          end
+
+          if update_data.key?('budget_cents') && !update_data['budget_cents'].to_s.match?(/\A\d+\z/)
+            app.response.status = 400
+            return { error: 'budget_cents must be a non-negative integer' }
+          end
+
+          project.update(update_data.transform_keys(&:to_sym))
+          { id: project.id, status: 'updated' }
+        rescue StandardError => e
+          app.class::APP_LOGGER.error("Failed to update project #{id}: #{e.message}")
+          app.response.status = 400
+          { error: 'Failed to update project' }
+        end
+      end
+
+      def self.delete_project(_req, app, id)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can delete projects' }
+        end
+
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          { error: 'Project not found' }
+        else
+          project.delete
+          { id: id, status: 'deleted' }
+        end
+      end
+
+      def self.admin?(app)
+        auth = app.auth_account
+        return false unless auth
+
+        if auth.is_a?(Hash)
+          auth['system_role'] == 'admin' || auth[:system_role] == 'admin'
+        else
+          auth.system_role == 'admin'
         end
       end
     end
