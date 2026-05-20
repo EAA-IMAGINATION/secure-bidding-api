@@ -41,7 +41,9 @@ describe 'Mailer To Go SMTP delivery' do
   def with_mailer_togo_env(env)
     keys = env.keys
     original = keys.to_h { |key| [key, ENV.key?(key) ? ENV[key] : :__missing__] }
-    env.each { |key, value| ENV[key] = value }
+    env.each do |key, value|
+      value.nil? ? ENV.delete(key) : ENV[key] = value
+    end
     yield
   ensure
     original.each do |key, value|
@@ -64,7 +66,7 @@ describe 'Mailer To Go SMTP delivery' do
     account = OpenStruct.new(username: 'mailuser', email: 'recipient@example.com')
 
     with_mailer_togo_env(
-      'MAILERTOGO_DELIVERY_METHOD' => 'smtp',
+      'MAILERTOGO_URL' => nil,
       'MAILERTOGO_SMTP_HOST' => 'smtp.us-west-1.mailertogo.net',
       'MAILERTOGO_SMTP_PORT' => '587',
       'MAILERTOGO_SMTP_USER' => 'mailertogo-user',
@@ -98,13 +100,13 @@ describe 'Mailer To Go SMTP delivery' do
     account = OpenStruct.new(username: 'mailuser', email: 'recipient@example.com')
 
     with_mailer_togo_env(
-      'MAILERTOGO_DELIVERY_METHOD' => 'smtp',
+      'MAILERTOGO_URL' => nil,
       'MAILERTOGO_SMTP_HOST' => 'smtp.us-west-1.mailertogo.net',
       'MAILERTOGO_SMTP_PORT' => '587',
       'MAILERTOGO_SMTP_USER' => 'mailertogo-user',
       'MAILERTOGO_SMTP_PASSWORD' => ''
     ) do
-      error = assert_raises(SecureBidding::Services::Email::SendVerification::MailtrapError) do
+      error = assert_raises(SecureBidding::Services::Email::SendVerification::MailerToGoError) do
         SecureBidding::Services::Email::SendVerification.call(
           account: account,
           registration_token: 'token-123',
