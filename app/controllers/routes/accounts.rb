@@ -53,10 +53,19 @@ module SecureBidding
           req.patch true do
             update_account(req, app, id)
           end
+
+          req.delete true do
+            delete_account(req, app, id)
+          end
         end
       end
 
-      def self.list_accounts(_req, _app)
+      def self.list_accounts(_req, app)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can list all accounts' }
+        end
+
         accounts = Account.order(:id).all.map do |account|
           { id: account.id, username: account.username, system_role: account.system_role }
         end
@@ -106,6 +115,11 @@ module SecureBidding
       end
 
       def self.assign_system_role(_req, app, id)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can assign system roles' }
+        end
+
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
@@ -138,9 +152,14 @@ module SecureBidding
       end
 
       def self.update_account(_req, app, id)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can update accounts' }
+        end
+
         unless app.valid_uuid?(id)
           app.response.status = 404
-          { error: 'Account not found' }
+          return { error: 'Account not found' }
         end
 
         account = SecureBidding::Services::Accounts::GetAccount.call(id)
@@ -158,6 +177,39 @@ module SecureBidding
             app.response.status = result[:status]
             { error: result[:error] }
           end
+        end
+      end
+
+      def self.delete_account(_req, app, id)
+        unless admin?(app)
+          app.response.status = 403
+          return { error: 'Forbidden: only admins can delete accounts' }
+        end
+
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Account not found' }
+        end
+
+        account = SecureBidding::Services::Accounts::GetAccount.call(id)
+        if account.nil?
+          app.response.status = 404
+          { error: 'Account not found' }
+        else
+          account.delete
+          { id: id, status: 'deleted' }
+        end
+      end
+
+      def self.admin?(app)
+        auth = app.auth_account
+        return false unless auth
+
+        if auth.is_a?(Hash)
+          # Check both string and symbol keys
+          auth['system_role'] == 'admin' || auth[:system_role] == 'admin'
+        else
+          auth.system_role == 'admin'
         end
       end
     end
