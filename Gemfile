@@ -2,13 +2,15 @@
 
 source 'https://rubygems.org'
 
-ruby '3.4.9'
+ruby '3.4.2'
+
+gem 'logger'
 
 gem 'logger'
 
 gem 'base64'
 gem 'figaro'
-gem 'http', '~> 5.1' # HTTP client for outbound API calls
+gem 'base64'
 gem 'json'
 gem 'net-smtp'
 gem 'rackup'
@@ -18,6 +20,7 @@ gem 'roda'
 gem 'sequel'
 gem 'sequel-seed'
 gem 'sqlite3'
+gem 'http', '~> 5.1'  # HTTP client for outbound API calls
 
 group :production do
   # Use pg in production for Heroku Postgres

@@ -19,7 +19,6 @@ require_relative 'services/accounts/create_account'
 require_relative 'services/accounts/get_account'
 require_relative 'services/accounts/search_accounts'
 require_relative 'services/accounts/update_account'
-require_relative 'services/accounts/reset_accounts'
 require_relative 'services/email/send_verification'
 require_relative 'services/roles/ensure_roles'
 require_relative 'services/roles/assign_system_role'
@@ -33,10 +32,4 @@ require_relative 'lib/secure_db'
 require_relative 'lib/search_hash'
 require_relative 'lib/key_stretching'
 require_relative 'lib/auth_token'
-require_relative 'lib/secure_messaging'
-require_relative 'lib/registration_token'
-
-# Initialize AuthToken with encryption key from environment
-SecureBidding::AuthToken.setup(ENV.fetch('AUTH_TOKEN_KEY', nil))
-
 require_relative 'controllers/app'
