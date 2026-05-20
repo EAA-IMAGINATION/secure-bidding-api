@@ -88,7 +88,7 @@ module SecureBidding
             registration_token: account.registration_token,
             verification_url: verification_url
           )
-        rescue SecureBidding::Services::Email::SendVerification::MailtrapError => e
+        rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
           app.class::APP_LOGGER.error("Email service error: #{e.message}")
           return req.halt(500, { error: 'Failed to send verification email' }.to_json)
         end
@@ -171,4 +171,3 @@ module SecureBidding
     end
   end
 end
-
