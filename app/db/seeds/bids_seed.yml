@@ -1,0 +1,16 @@
+---
+bids:
+  - id: "550e8400-e29b-41d4-a716-446655440001"
+    contractor: "BuildRight Construction"
+    project_id: "project-alpha-001"
+    encrypted_bid: "YmFzZTY0X2VuY3J5cHRlZF9iaWRfZGF0YV8x"
+  
+  - id: "550e8400-e29b-41d4-a716-446655440002"
+    contractor: "TechSolutions Inc"
+    project_id: "project-beta-002"
+    encrypted_bid: "YmFzZTY0X2VuY3J5cHRlZF9iaWRfZGF0YV8y"
+  
+  - id: "550e8400-e29b-41d4-a716-446655440003"
+    contractor: "FreelanceDesigns Co"
+    project_id: "project-gamma-003"
+    encrypted_bid: "YmFzZTY0X2VuY3J5cHRlZF9iaWRfZGF0YV8z"
