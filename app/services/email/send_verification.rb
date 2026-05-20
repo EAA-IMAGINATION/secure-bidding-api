@@ -2,6 +2,7 @@
 
 require 'http'
 require 'json'
+require 'net/smtp'
 require_relative '../../../config/environments'
 
 module SecureBidding
@@ -32,6 +33,10 @@ module SecureBidding
           SecureBidding::Services::Email::SendVerification.last_payload = payload
           SecureBidding::Services::Email::SendVerification.last_payloads ||= []
           SecureBidding::Services::Email::SendVerification.last_payloads << payload
+
+          if ENV.fetch('MAILERTOGO_DELIVERY_METHOD', 'api') == 'smtp'
+            return send_via_smtp(payload)
+          end
 
           response = send_to_mailtrap(payload)
 
@@ -92,12 +97,12 @@ module SecureBidding
 
         def from_email
           SecureBidding::Environment.load_secrets!
-          ENV.fetch('MAILTRAP_FROM_EMAIL', 'noreply@secure-bidding-api.local')
+          ENV.fetch('MAILERTOGO_FROM_EMAIL', ENV.fetch('MAILTRAP_FROM_EMAIL', 'noreply@secure-bidding-api.local'))
         end
 
         def from_name
           SecureBidding::Environment.load_secrets!
-          ENV.fetch('MAILTRAP_FROM_NAME', 'Secure Bidding API')
+          ENV.fetch('MAILERTOGO_FROM_NAME', ENV.fetch('MAILTRAP_FROM_NAME', 'Secure Bidding API'))
         end
 
         def send_to_mailtrap(payload)
@@ -114,6 +119,38 @@ module SecureBidding
                 api_url,
                 json: payload
               )
+        end
+
+        def send_via_smtp(payload)
+          SecureBidding::Environment.load_secrets!
+          host = ENV.fetch('MAILERTOGO_SMTP_HOST', 'localhost')
+          port = ENV.fetch('MAILERTOGO_SMTP_PORT', '587').to_i
+          username = ENV.fetch('MAILERTOGO_SMTP_USER', '')
+          password = ENV.fetch('MAILERTOGO_SMTP_PASSWORD', '')
+          auth = (ENV['MAILERTOGO_SMTP_AUTH'] || 'plain').to_sym
+
+          if username.to_s.strip.empty? || password.to_s.strip.empty?
+            raise MailtrapError, 'SMTP credentials missing'
+          end
+
+          to_email = payload[:to].first[:email]
+          message = <<~MSG
+            From: #{from_name} <#{from_email}>
+            To: #{to_email}
+            Subject: #{payload[:subject]}
+            MIME-Version: 1.0
+            Content-type: text/html
+
+            #{payload[:html]}
+          MSG
+
+          smtp = Net::SMTP.new(host, port)
+          smtp.enable_starttls_auto if smtp.respond_to?(:enable_starttls_auto)
+          smtp.start('localhost', username, password, auth) do |s|
+            s.send_message(message, from_email, to_email)
+          end
+
+          { ok: true, message: 'Verification email sent (smtp)' }
         end
 
         def mailtrap_api_key

@@ -7,6 +7,7 @@ module SecureBidding
       class CreateProjectRequirement
         def self.call(payload)
           owner_account_id = payload['owner_account_id']
+          state = payload['state']
           return { ok: false, status: 400, error: 'owner_account_id is required' } if owner_account_id.to_s.strip.empty?
 
           owner = SecureBidding::Account[owner_account_id]
@@ -16,11 +17,17 @@ module SecureBidding
             return { ok: false, status: 403, error: 'owner account must have project_owner role' }
           end
 
+          unless state.nil? || SecureBidding::Project::VALID_STATES.include?(state)
+            return { ok: false, status: 400, error: "state must be 'saved' or 'published'" }
+          end
+
           project = SecureBidding::Project.new
-          project.set(
+          project_attributes = {
             title: payload['title'],
             budget_cents: payload['budget_cents']
-          )
+          }
+          project_attributes[:state] = state unless state.nil?
+          project.set(project_attributes)
           project.save
 
           role = SecureBidding::Role.first(name: 'project_owner')
