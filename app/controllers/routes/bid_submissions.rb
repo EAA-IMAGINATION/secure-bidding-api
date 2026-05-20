@@ -58,6 +58,15 @@ module SecureBidding
         elsif Project[project_id].nil?
           app.response.status = 400
           { error: 'project_id does not reference an existing project' }
+        elsif Project[project_id].state != 'published'
+          app.response.status = 403
+          { error: 'Project is not open for bidding' }
+        elsif app.auth_account.nil?
+          app.response.status = 403
+          { error: 'Login required to bid on projects' }
+        elsif project_owner?(Project[project_id], app.auth_account)
+          app.response.status = 403
+          { error: 'Project owner cannot bid on own project' }
         else
           bid_submission = BidSubmission.new
           attributes = payload.reject { |key_name, _| key_name == 'plaintext_bid' }
@@ -73,6 +82,18 @@ module SecureBidding
         app.log_mass_assignment_attempt('bid_submission', payload, BidSubmission.allowed_columns + [:plaintext_bid])
         app.response.status = 400
         { error: 'Invalid bid submission attributes' }
+      end
+
+      def self.project_owner?(project, auth_account)
+        account_id = auth_account[:account_id] || auth_account['account_id']
+        owner_role = Role.first(name: 'project_owner')
+        return false if account_id.nil? || owner_role.nil?
+
+        ProjectMembership.first(
+          account_id: account_id,
+          project_id: project.id,
+          role_id: owner_role.id
+        ) != nil
       end
 
       def self.show_bid_submission(_req, app, id)

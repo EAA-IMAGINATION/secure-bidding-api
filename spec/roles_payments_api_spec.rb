@@ -23,7 +23,16 @@ describe 'API role and payment placeholders' do
     account
   end
 
+  def auth_header_for(account)
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+  end
+
   before do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
     SecureBidding::Database.migrate!
     db = SecureBidding::Database.db
     db[:payments].delete if db.table_exists?(:payments)
@@ -77,7 +86,7 @@ describe 'API role and payment placeholders' do
     _(owner_membership['role']).must_equal 'project_owner'
   end
 
-  it 'HAPPY: allows bidder membership to create project bid' do
+  it 'HAPPY: allows any account to bid on a published project without membership' do
     owner = create_account(username: 'owner-two', email: 'owner-two@example.com')
     bidder = create_account(username: 'bidder-one', email: 'bidder-one@example.com')
 
@@ -90,19 +99,12 @@ describe 'API role and payment placeholders' do
          {
            title: 'bid-project',
            budget_cents: 200_000,
-           owner_account_id: owner.id
+           owner_account_id: owner.id,
+           state: 'published'
          }.to_json,
          { 'CONTENT_TYPE' => 'application/json' }
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
-
-    post "/api/v1/projects/#{project_id}/memberships",
-         {
-           account_id: bidder.id,
-           role: 'bidder'
-         }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
-    _(last_response.status).must_equal 201
 
     post "/api/v1/projects/#{project_id}/bids",
          {
@@ -110,14 +112,14 @@ describe 'API role and payment placeholders' do
            contractor_alias: 'acme-bidder',
            plaintext_bid: 'secret-bid'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(bidder)
 
     _(last_response.status).must_equal 201
     response = JSON.parse(last_response.body)
     _(response['id']).wont_be_nil
   end
 
-  it 'SAD: rejects bid creation by account without bidder membership' do
+  it 'SAD: rejects bidding on saved project state' do
     owner = create_account(username: 'owner-three', email: 'owner-three@example.com')
     outsider = create_account(username: 'outsider', email: 'outsider@example.com')
 
@@ -142,9 +144,43 @@ describe 'API role and payment placeholders' do
            contractor_alias: 'not-allowed',
            plaintext_bid: 'should-fail'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(outsider)
 
     _(last_response.status).must_equal 403
+    response = JSON.parse(last_response.body)
+    _(response['error']).must_equal 'Project is not open for bidding'
+  end
+
+  it 'SAD: rejects project owner bidding on own published project' do
+    owner = create_account(username: 'owner-self-bid', email: 'owner-self-bid@example.com')
+
+    post "/api/v1/accounts/#{owner.id}/system_roles",
+         { role: 'project_owner' }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+    _(last_response.status).must_equal 201
+
+    post '/api/v1/projects',
+         {
+           title: 'self-owned-project',
+           budget_cents: 310_000,
+           owner_account_id: owner.id,
+           state: 'published'
+         }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: owner.id,
+           contractor_alias: 'self-owner',
+           plaintext_bid: 'should-be-rejected'
+         }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 403
+    response = JSON.parse(last_response.body)
+    _(response['error']).must_equal 'Project owner cannot bid on own project'
   end
 
   it 'HAPPY: creates and updates payment placeholder status' do
@@ -160,19 +196,12 @@ describe 'API role and payment placeholders' do
          {
            title: 'payment-project',
            budget_cents: 400_000,
-           owner_account_id: owner.id
+           owner_account_id: owner.id,
+           state: 'published'
          }.to_json,
          { 'CONTENT_TYPE' => 'application/json' }
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
-
-    post "/api/v1/projects/#{project_id}/memberships",
-         {
-           account_id: bidder.id,
-           role: 'bidder'
-         }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
-    _(last_response.status).must_equal 201
 
     post "/api/v1/projects/#{project_id}/bids",
          {
@@ -180,7 +209,7 @@ describe 'API role and payment placeholders' do
            contractor_alias: 'payment-bidder',
            plaintext_bid: 'payment-secret-bid'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(bidder)
     _(last_response.status).must_equal 201
     bid_submission_id = JSON.parse(last_response.body)['id']
 
