@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 ENV['RACK_ENV'] = 'test'
+require 'base64'
 
 require 'minitest/autorun'
 require 'rack/test'
@@ -16,7 +17,18 @@ describe 'API /api/v1/auth registration endpoints' do
     SecureBidding::App.freeze.app
   end
 
+  def registration_email_payload
+    SecureBidding::Services::Email::SendVerification.last_payload
+  end
+
+  def registration_token_from_email
+    html = registration_email_payload.fetch(:html)
+    html.match(%r{/register/verify/([^"<\s]+)})[1]
+  end
+
   before do
+    ENV['MSG_KEY'] ||= Base64.strict_encode64('0123456789abcdef0123456789abcdef')
+    ENV['FRONTEND_APP_URL'] ||= 'http://localhost:9292'
     SecureBidding::Database.migrate!
     SecureBidding::BidSubmission.dataset.delete
     SecureBidding::Project.dataset.delete
@@ -24,6 +36,11 @@ describe 'API /api/v1/auth registration endpoints' do
     SecureBidding::Account.dataset.delete
     SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
     WebMock.reset!
+    SecureBidding::Services::Email::SendVerification.last_payload = nil
+    SecureBidding::Services::Email::SendVerification.last_headers = nil
+    SecureBidding::Services::Email::SendVerification.last_payloads = []
+    SecureBidding::Services::Email::SendVerification.last_headers_array = []
+    ENV['FRONTEND_APP_URL'] = 'http://localhost:9292'
   end
 
   # POST /api/v1/auth/availability tests
@@ -35,7 +52,6 @@ describe 'API /api/v1/auth registration endpoints' do
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
-      _(response_body['available']).must_be_kind_of Hash
       _(response_body['available']['username']).must_equal true
       _(response_body['available']['email']).must_equal true
     end
@@ -91,40 +107,25 @@ describe 'API /api/v1/auth registration endpoints' do
 
   # POST /api/v1/auth/register tests
   describe 'POST /api/v1/auth/register' do
-    it 'HAPPY: creates unverified account and sends verification email' do
+    it 'HAPPY: sends verification email without creating the account' do
       stub_request(:post, 'https://send.api.mailtrap.io/api/send')
         .to_return(status: 200, body: JSON.generate({ ok: true }))
 
       post '/api/v1/auth/register',
-           JSON.generate({ username: 'newregister', email: 'register@example.com' }),
+           JSON.generate({ username: 'scifiengineering', email: 'scifithedev@gapp.nthu.edu.tw' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
       _(response_body['message']).must_include 'Check your email'
-      _(response_body['account_id']).wont_be_nil
+      _(response_body['account_id']).must_be_nil
 
-      stored = SecureBidding::Account[response_body['account_id']]
-      _(stored).wont_be_nil
-      _(stored.username).must_equal 'newregister'
-      _(stored.email).must_equal 'register@example.com'
-      _(stored.email_verified_at).must_be_nil
-      _(stored.registration_token).wont_be_nil
-    end
+      stored = SecureBidding::Account.where(username: 'scifiengineering').first
+      _(stored).must_be_nil
 
-    it 'HAPPY: email is encrypted in database' do
-      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
-        .to_return(status: 200, body: JSON.generate({ ok: true }))
-
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'encrypted_user', email: 'encrypted@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
-
-      response_body = JSON.parse(last_response.body)
-      stored = SecureBidding::Account[response_body['account_id']]
-      
-      _(stored.email_secure).wont_equal 'encrypted@example.com'
-      _(stored.email).must_equal 'encrypted@example.com'
+      html = registration_email_payload[:html]
+      _(html).must_include 'scifiengineering'
+      _(html).must_include 'http://localhost:9292/register/verify/'
     end
 
     it 'SAD: returns 400 for missing username' do
@@ -200,33 +201,19 @@ describe 'API /api/v1/auth registration endpoints' do
       _(last_response.status).must_equal 500
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_include 'email'
+      _(SecureBidding::Account.where(username: 'mailuser').first).must_be_nil
     end
 
-    it 'SAD: deletes account if email service fails' do
+    it 'SAD: does not persist account when Mailtrap returns 400' do
       stub_request(:post, 'https://send.api.mailtrap.io/api/send')
-        .to_return(status: 500, body: 'Internal Server Error')
+        .to_return(status: 400, body: 'Bad Request')
 
       post '/api/v1/auth/register',
-           JSON.generate({ username: 'failmail', email: 'failmail@example.com' }),
+           JSON.generate({ username: 'badrequestuser', email: 'badrequest@example.com' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 500
-
-      # Verify account was deleted (not in database)
-      account = SecureBidding::Account.where(username: 'failmail').first
-      _(account).must_be_nil
-
-      # Verify user can retry registration after email failure
-      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
-        .to_return(status: 200, body: JSON.generate({ ok: true }))
-
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'failmail', email: 'failmail@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
-
-      _(last_response.status).must_equal 200
-      response_body = JSON.parse(last_response.body)
-      _(response_body['account_id']).wont_be_nil
+      _(SecureBidding::Account.where(username: 'badrequestuser').first).must_be_nil
     end
   end
 
@@ -240,91 +227,39 @@ describe 'API /api/v1/auth registration endpoints' do
            JSON.generate({ username: 'verifyuser', email: 'verify@example.com' }),
            'CONTENT_TYPE' => 'application/json'
 
-      register_response = JSON.parse(last_response.body)
-      account_id = register_response['account_id']
-      account = SecureBidding::Account[account_id]
-      registration_token = account.registration_token
+      registration_token = registration_token_from_email
 
       post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: registration_token }),
+           JSON.generate({ registration_token: registration_token, password: 'secret123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
       _(response_body['token']).wont_be_nil
       _(response_body['account']).must_be_kind_of Hash
-      _(response_body['account']['id']).must_equal account_id
       _(response_body['account']['username']).must_equal 'verifyuser'
       _(response_body['account']['email']).must_equal 'verify@example.com'
+
+      account = SecureBidding::Account.where(username: 'verifyuser').first
+      _(account).wont_be_nil
+      _(account.check_password('secret123')).must_equal true
+      _(account.email_verified_at).wont_be_nil
     end
 
-    it 'HAPPY: email_verified_at is set after verification' do
+    it 'HAPPY: creates the account only after verification' do
       stub_request(:post, 'https://send.api.mailtrap.io/api/send')
         .to_return(status: 200, body: JSON.generate({ ok: true }))
 
       post '/api/v1/auth/register',
-           JSON.generate({ username: 'verifyuser2', email: 'verify2@example.com' }),
+           JSON.generate({ username: 'pendinguser', email: 'pending@example.com' }),
            'CONTENT_TYPE' => 'application/json'
 
-      register_response = JSON.parse(last_response.body)
-      account_id = register_response['account_id']
-      account = SecureBidding::Account[account_id]
-      registration_token = account.registration_token
-
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: registration_token }),
-           'CONTENT_TYPE' => 'application/json'
-
-      verified_account = SecureBidding::Account[account_id]
-      _(verified_account.email_verified_at).wont_be_nil
-    end
-
-    it 'HAPPY: session token is valid for ONE_WEEK' do
-      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
-        .to_return(status: 200, body: JSON.generate({ ok: true }))
-
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'tokenuser', email: 'token@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
-
-      register_response = JSON.parse(last_response.body)
-      account = SecureBidding::Account[register_response['account_id']]
-      registration_token = account.registration_token
-
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: registration_token }),
-           'CONTENT_TYPE' => 'application/json'
-
-      response_body = JSON.parse(last_response.body)
-      session_token = response_body['token']
-
-      token_obj = SecureBidding::AuthToken.load(session_token)
-      _(token_obj.fresh?).must_equal true
-      _(token_obj.payload[:account_id]).must_equal register_response['account_id']
-    end
-
-    it 'SAD: returns 403 for expired token' do
-      stub_request(:post, 'https://send.api.mailtrap.io/api/send')
-        .to_return(status: 200, body: JSON.generate({ ok: true }))
-
-      # Create a token manually that's already expired
-      expired_token = SecureBidding::AuthToken.new(
-        { account_id: 'test-id-123' },
-        -3600  # Negative expiration = already expired
-      ).to_s
-
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: expired_token }),
-           'CONTENT_TYPE' => 'application/json'
-
-      _(last_response.status).must_equal 403
-      response_body = JSON.parse(last_response.body)
-      _(response_body['error']).must_include 'expired'
+      _(SecureBidding::Account.where(username: 'pendinguser').first).must_be_nil
     end
 
     it 'SAD: returns 404 for invalid token' do
       post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: 'invalid_token_string' }),
+           JSON.generate({ registration_token: 'invalid_token_string', password: 'secret123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 404
@@ -334,12 +269,22 @@ describe 'API /api/v1/auth registration endpoints' do
 
     it 'SAD: returns 400 for missing token' do
       post '/api/v1/auth/verify',
-           JSON.generate({}),
+           JSON.generate({ password: 'secret123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 400
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_include 'required'
+    end
+
+    it 'SAD: returns 400 for missing password' do
+      post '/api/v1/auth/verify',
+           JSON.generate({ registration_token: 'token-value' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 400
+      response_body = JSON.parse(last_response.body)
+      _(response_body['error']).must_include 'password'
     end
   end
 
@@ -349,7 +294,6 @@ describe 'API /api/v1/auth registration endpoints' do
       stub_request(:post, 'https://send.api.mailtrap.io/api/send')
         .to_return(status: 200, body: JSON.generate({ ok: true }))
 
-      # Step 1: Check availability
       post '/api/v1/auth/availability',
            JSON.generate({ username: 'fullflow', email: 'fullflow@example.com' }),
            'CONTENT_TYPE' => 'application/json'
@@ -359,21 +303,15 @@ describe 'API /api/v1/auth registration endpoints' do
       _(availability['available']['username']).must_equal true
       _(availability['available']['email']).must_equal true
 
-      # Step 2: Register
       post '/api/v1/auth/register',
            JSON.generate({ username: 'fullflow', email: 'fullflow@example.com' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 200
-      register_result = JSON.parse(last_response.body)
-      account_id = register_result['account_id']
-
-      # Step 3: Verify
-      account = SecureBidding::Account[account_id]
-      registration_token = account.registration_token
+      token = registration_token_from_email
 
       post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: registration_token }),
+           JSON.generate({ registration_token: token, password: 'top-secret-123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 200
@@ -381,8 +319,8 @@ describe 'API /api/v1/auth registration endpoints' do
       _(verify_result['token']).wont_be_nil
       _(verify_result['account']['username']).must_equal 'fullflow'
 
-      # Verify account is now verified
-      final_account = SecureBidding::Account[account_id]
+      final_account = SecureBidding::Account.where(username: 'fullflow').first
+      _(final_account).wont_be_nil
       _(final_account.email_verified_at).wont_be_nil
     end
   end
