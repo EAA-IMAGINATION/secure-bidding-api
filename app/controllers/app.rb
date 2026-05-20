@@ -97,6 +97,10 @@ module SecureBidding
       }
     end
 
+    def auth_account
+      @auth_account
+    end
+
     # rubocop:disable Metrics/BlockLength
     route do |r|
       # CORS headers for cross-origin requests
