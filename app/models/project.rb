@@ -3,10 +3,12 @@
 module SecureBidding
   # Represents a project that can receive bid submissions.
   class Project < Sequel::Model(:projects)
+    VALID_STATES = %w[saved published].freeze
+
     plugin :uuid, field: :id
     plugin :whitelist_security
     plugin :association_dependencies
-    set_allowed_columns :title, :budget_cents
+    set_allowed_columns :title, :budget_cents, :state
 
     one_to_many :bid_submissions, key: :project_id, class: 'SecureBidding::BidSubmission'
     one_to_many :account_projects, key: :project_id, class: 'SecureBidding::AccountProject'
