@@ -100,7 +100,7 @@ Expected:
 ```bash
 curl -X POST http://localhost:3000/api/v1/projects \
   -H "Content-Type: application/json" \
-  -d '{"title":"demo-project","budget_cents":120000}'
+  -d '{"title":"demo-project","budget_cents":120000,"state":"published"}'
 ```
 
 Expected:
@@ -141,6 +141,16 @@ Create bid:
 curl -X POST http://localhost:3000/api/v1/bids \
   -H "Content-Type: application/json" \
   -d '{"contractor":"ABC Construction","project_id":"project-123","encrypted_bid":"base64_encrypted_data_here"}'
+```
+
+Project-scoped bids now require a Bearer token and only allow bidding on
+`published` projects. Project owners cannot bid on their own projects:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/bids \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -d '{"bidder_account_id":"ACCOUNT_ID","contractor_alias":"demo-bidder","plaintext_bid":"top-secret"}'
 ```
 
 Then list and fetch by id:
@@ -260,9 +270,9 @@ bundle exec rake spec
 - `PATCH /api/v1/accounts/:id`
 - `GET /api/v1/accounts/:id/system_roles`
 - `POST /api/v1/accounts/:id/system_roles`
-- `GET /api/v1/projects`
-- `GET /api/v1/projects/:id`
-- `POST /api/v1/projects`
+- `GET /api/v1/projects` (published projects only)
+- `GET /api/v1/projects/:id` (published projects only)
+- `POST /api/v1/projects` (`state`: `saved` or `published`, defaults to `saved`)
 - `GET /api/v1/projects/:id/memberships`
 - `POST /api/v1/projects/:id/memberships`
 - `POST /api/v1/projects/:id/bids`
