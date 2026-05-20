@@ -56,6 +56,11 @@ describe 'Mailer To Go SMTP integration' do
     end
   end
 
+  def extract_registration_token(message)
+    match = message.match(/token=([^"&\s<]+)/)
+    match && match[1]
+  end
+
   before do
     SecureBidding::Database.migrate!
     SecureBidding::BidSubmission.dataset.delete
@@ -96,11 +101,12 @@ describe 'Mailer To Go SMTP integration' do
            'CONTENT_TYPE' => 'application/json'
     end
 
-    response_body = JSON.parse(last_response.body)
-    account = SecureBidding::Account[response_body['account_id']]
     payload = @fake_smtp.messages.first[:message]
+    token = extract_registration_token(payload)
+    token_payload = SecureBidding::AuthToken.load(token).payload
 
-    _(payload).must_include account.registration_token
     _(payload).must_include 'token='
+    _(token_payload[:username]).must_equal 'tokentest'
+    _(token_payload[:email]).must_equal 'tokentest@example.com'
   end
 end

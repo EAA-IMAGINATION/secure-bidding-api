@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'securerandom'
-
 module SecureBidding
   module Routes
     # Handles authentication endpoints under /auth.
@@ -72,20 +70,17 @@ module SecureBidding
 
         account = SecureBidding::Account.new(username: username, system_role: 'member')
         account.set_email(email)
-        # Set a temporary password - will be replaced on first login with password reset
-        account.set_password(SecureRandom.random_bytes(32).to_s)
-        account.save
-
-        # Now that account is saved with an ID, set the registration token
-        account.set_registration_token(SecureBidding::AuthToken::ONE_HOUR)
-        account.save
+        registration_token = SecureBidding::AuthToken.tokenize(
+          { username: username, email: email },
+          SecureBidding::AuthToken::ONE_HOUR
+        )
 
         verification_url = build_verification_url(app, req)
-        
+
         begin
           SecureBidding::Services::Email::SendVerification.call(
             account: account,
-            registration_token: account.registration_token,
+            registration_token: registration_token,
             verification_url: verification_url
           )
         rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
@@ -94,8 +89,7 @@ module SecureBidding
         end
 
         {
-          message: 'Check your email to verify your account',
-          account_id: account.id
+          message: 'Check your email to verify your account'
         }
       rescue Sequel::UniqueConstraintViolation
         req.halt 422, { error: 'Account data already exists' }.to_json
@@ -107,20 +101,32 @@ module SecureBidding
       def self.handle_verify(req, app)
         data = HttpRequest.new(req).body_data
         registration_token = data[:registration_token].to_s.strip
+        password = data[:password].to_s.strip
 
-        return req.halt(400, { error: 'registration_token is required' }.to_json) if registration_token.empty?
+        return req.halt(400, { error: 'registration_token and password are required' }.to_json) if registration_token.empty? || password.empty?
 
         begin
-          account = SecureBidding::Account.by_registration_token(registration_token)
+          token_data = SecureBidding::AuthToken.load(registration_token)
+          payload = token_data.payload
+          username = payload[:username]
+          email = payload[:email]
         rescue SecureBidding::ExpiredTokenError
           return req.halt(403, { error: 'Token has expired' }.to_json)
         rescue SecureBidding::InvalidTokenError
           return req.halt(404, { error: 'Invalid token' }.to_json)
-        rescue StandardError => e
-          app.class::APP_LOGGER.error("Verification error: #{e.message}")
-          return req.halt(404, { error: 'Account not found' }.to_json)
         end
 
+        unless SecureBidding::Account.username_available?(username)
+          return req.halt(422, { error: 'username already taken' }.to_json)
+        end
+
+        unless SecureBidding::Account.email_available?(email)
+          return req.halt(422, { error: 'email already taken' }.to_json)
+        end
+
+        account = SecureBidding::Account.new(username: username, system_role: 'member')
+        account.set_email(email)
+        account.set_password(password)
         account.verify_email!
 
         session_payload = {
@@ -138,6 +144,8 @@ module SecureBidding
             email: account.email
           }
         }
+      rescue Sequel::UniqueConstraintViolation
+        req.halt 422, { error: 'Account data already exists' }.to_json
       rescue StandardError => e
         app.class::APP_LOGGER.error("Verification error: #{e.message}")
         req.halt 500, { error: 'Verification failed' }.to_json
