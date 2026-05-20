@@ -61,6 +61,11 @@ describe 'API /api/v1/auth registration endpoints' do
     end
   end
 
+  def extract_registration_token(message)
+    match = message.match(/token=([^"&\s<]+)/)
+    match && match[1]
+  end
+
   before do
     SecureBidding::Database.migrate!
     SecureBidding::BidSubmission.dataset.delete
@@ -94,7 +99,7 @@ describe 'API /api/v1/auth registration endpoints' do
   end
 
   describe 'POST /api/v1/auth/register' do
-    it 'creates an unverified account and sends a verification email' do
+    it 'sends a verification email without persisting the account' do
       with_mailer_togo_env do
         post '/api/v1/auth/register',
              JSON.generate({ username: 'newregister', email: 'register@example.com' }),
@@ -104,16 +109,19 @@ describe 'API /api/v1/auth registration endpoints' do
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
       _(response_body['message']).must_include 'Check your email'
-      _(response_body['account_id']).wont_be_nil
+      _(response_body).wont_include 'account_id'
 
-      stored = SecureBidding::Account[response_body['account_id']]
-      _(stored.username).must_equal 'newregister'
-      _(stored.email).must_equal 'register@example.com'
-      _(stored.email_verified_at).must_be_nil
-      _(stored.registration_token).wont_be_nil
+      _(SecureBidding::Account.where(username: 'newregister').count).must_equal 0
+      _(SecureBidding::Account.where(email_hash: SecureBidding::Account.search_hash('register@example.com')).count).must_equal 0
       _( @fake_smtp.messages.length).must_equal 1
       _( @fake_smtp.messages.first[:from]).must_equal 'securebidfreelanceprocurementh@gmail.com'
       _( @fake_smtp.messages.first[:to]).must_equal 'register@example.com'
+
+      token = extract_registration_token(@fake_smtp.messages.first[:message])
+      _(token).wont_be_nil
+      token_payload = SecureBidding::AuthToken.load(token).payload
+      _(token_payload[:username]).must_equal 'newregister'
+      _(token_payload[:email]).must_equal 'register@example.com'
     end
 
     it 'returns 400 for missing email' do
@@ -161,31 +169,39 @@ describe 'API /api/v1/auth registration endpoints' do
   end
 
   describe 'POST /api/v1/auth/verify' do
-    it 'verifies the account and returns a session token' do
+    it 'creates the account during verification and returns a session token' do
       with_mailer_togo_env do
         post '/api/v1/auth/register',
              JSON.generate({ username: 'verifyuser', email: 'verify@example.com' }),
              'CONTENT_TYPE' => 'application/json'
       end
 
-      register_response = JSON.parse(last_response.body)
-      account_id = register_response['account_id']
-      account = SecureBidding::Account[account_id]
+      token = extract_registration_token(@fake_smtp.messages.first[:message])
 
       post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: account.registration_token }),
+           JSON.generate({ registration_token: token, password: 'chosen_password_123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
       _(response_body['token']).wont_be_nil
-      _(response_body['account']['id']).must_equal account_id
+      _(response_body['account']['id']).wont_be_nil
+      _(response_body['account']['username']).must_equal 'verifyuser'
       _(response_body['account']['email']).must_equal 'verify@example.com'
+
+      account = SecureBidding::Account[response_body['account']['id']]
+      _(account.email_verified_at).wont_be_nil
+
+      post '/api/v1/auth/authenticate',
+           JSON.generate({ username: 'verifyuser', password: 'chosen_password_123' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
     end
 
     it 'returns 404 for an invalid token' do
       post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: 'invalid_token_string' }),
+           JSON.generate({ registration_token: 'invalid_token_string', password: 'password123' }),
            'CONTENT_TYPE' => 'application/json'
 
       _(last_response.status).must_equal 404
