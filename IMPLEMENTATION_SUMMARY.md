@@ -1,11 +1,13 @@
 # Week 12 Registration Endpoints Implementation Summary
 
 ## Overview
+
 Successfully implemented complete tokenized registration flow for the Secure Bidding API with three new endpoints, extended Account model, email verification service, and comprehensive test coverage.
 
 ## Part A: Extended Account Model (`app/models/account.rb`)
 
-### New Class Methods:
+### New Class Methods
+
 1. **`by_registration_token(token_string)`**
    - Loads and decrypts registration token
    - Extracts account_id from token payload
@@ -21,7 +23,8 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
    - Checks if username doesn't exist in database
    - Returns boolean
 
-### New Instance Methods:
+### New Instance Methods
+
 1. **`set_registration_token(expiration = ONE_HOUR)`**
    - Creates AuthToken with account_id payload
    - Stores encrypted token in `registration_token` column
@@ -34,11 +37,13 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 
 ## Part B: MailService (`app/services/email/send_verification.rb`)
 
-### SendVerification Service:
+### SendVerification Service
+
 - **Initialization**: `SendVerification.new(account, registration_token, verification_url)`
 - **Usage**: `SendVerification.call(account:, registration_token:, verification_url:)`
 
-### Features:
+### Features
+
 1. **Email Payload Building**
    - From: MAILTRAP_FROM_EMAIL and MAILTRAP_FROM_NAME (from environment)
    - To: account.email
@@ -64,11 +69,13 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 **Purpose**: Check if username and email are available
 
 **Request**:
+
 ```json
 { "username": "alice", "email": "alice@example.com" }
 ```
 
 **Response** (200 OK):
+
 ```json
 {
   "available": {
@@ -79,6 +86,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 ```
 
 **Behavior**:
+
 - Returns `nil` for empty username/email fields
 - Timing-safe responses (same time for taken/available)
 - Always returns 200 status
@@ -90,11 +98,13 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 **Purpose**: Initiate registration, create account, send verification email
 
 **Request**:
+
 ```json
 { "username": "alice", "email": "alice@example.com" }
 ```
 
 **Response** (200 OK):
+
 ```json
 {
   "message": "Check your email to verify your account",
@@ -103,6 +113,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 ```
 
 **Behavior**:
+
 1. Validates username and email are provided (400 if missing)
 2. Checks availability (422 if taken)
 3. Creates Account record:
@@ -115,6 +126,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 6. Returns account_id for reference
 
 **Error Responses**:
+
 - 400: Missing username or email
 - 422: Username or email already taken
 - 500: Email service failure
@@ -126,11 +138,13 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 **Purpose**: Verify email with token, complete registration
 
 **Request**:
+
 ```json
 { "registration_token": "<encrypted-token-string>" }
 ```
 
 **Response** (200 OK):
+
 ```json
 {
   "token": "<session-token-string>",
@@ -143,6 +157,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 ```
 
 **Behavior**:
+
 1. Validates registration_token provided (400 if missing)
 2. Decrypts and validates token:
    - 403 if expired
@@ -156,6 +171,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 6. Returns session token and account details
 
 **Error Responses**:
+
 - 400: Missing registration_token
 - 403: Token has expired
 - 404: Token is invalid or account not found
@@ -163,13 +179,15 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 
 ## Integration Points
 
-### Database Columns (Migration 008):
+### Database Columns (Migration 008)
+
 - `registration_token`: String, nullable
 - `registration_token_expires_at`: DateTime, nullable
 - `email_verified_at`: DateTime, nullable
 - Index on `registration_token` for fast lookups
 
-### Environment Configuration:
+### Environment Configuration
+
 ```yaml
 MAILTRAP_API_KEY: "<token>"
 MAILTRAP_API_URL: "https://send.api.mailtrap.io/api/send"
@@ -177,7 +195,8 @@ MAILTRAP_FROM_EMAIL: "noreply@secure-bidding-api.local"
 MAILTRAP_FROM_NAME: "Secure Bidding API"
 ```
 
-### Dependencies:
+### Dependencies
+
 - `http` gem: For Mailtrap API calls
 - `securerandom`: For temporary password generation
 - `erb`: For HTML escaping in email template
@@ -190,7 +209,7 @@ MAILTRAP_FROM_NAME: "Secure Bidding API"
 **Assertions**: 61+
 **Status**: ✅ All passing
 
-### Test Categories:
+### Test Categories
 
 1. **Availability Checks** (5 tests)
    - New username and email available
@@ -216,7 +235,8 @@ MAILTRAP_FROM_NAME: "Secure Bidding API"
 4. **Full Flow** (1 test)
    - Complete: availability → register → verify
 
-### Webmock Integration:
+### Webmock Integration
+
 - Stubs Mailtrap API calls in test environment
 - Verifies correct payload structure
 - Simulates success/failure scenarios
@@ -232,29 +252,33 @@ MAILTRAP_FROM_NAME: "Secure Bidding API"
 
 ## Files Modified/Created
 
-### Created:
+### Created
+
 - ✅ `app/services/email/send_verification.rb` - Email service
 - ✅ `spec/registration_endpoints_spec.rb` - Comprehensive tests
 
-### Modified:
+### Modified
+
 - ✅ `app/models/account.rb` - Added 5 new methods
 - ✅ `app/controllers/routes/auth.rb` - Added 3 new endpoints
 - ✅ `app/require_app.rb` - Added email service require
 
-### Existing (Unchanged):
+### Existing (Unchanged)
+
 - `app/db/migrations/008_add_registration_and_verification_columns.rb`
 - `config/secrets-example.yml` - Already contains Mailtrap config
 
 ## Verification
 
-### Test Results:
+### Test Results
+
 ```
 149 runs, 386 assertions, 0 failures, 0 errors, 0 skips
 ```
 
 All existing tests still passing. No regressions introduced.
 
-### Example Usage:
+### Example Usage
 
 ```bash
 # 1. Check availability
