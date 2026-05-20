@@ -97,12 +97,12 @@ module SecureBidding
 
         def from_email
           SecureBidding::Environment.load_secrets!
-          ENV.fetch('MAILTRAP_FROM_EMAIL', 'noreply@secure-bidding-api.local')
+          ENV.fetch('MAILERTOGO_FROM_EMAIL', ENV.fetch('MAILTRAP_FROM_EMAIL', 'noreply@secure-bidding-api.local'))
         end
 
         def from_name
           SecureBidding::Environment.load_secrets!
-          ENV.fetch('MAILTRAP_FROM_NAME', 'Secure Bidding API')
+          ENV.fetch('MAILERTOGO_FROM_NAME', ENV.fetch('MAILTRAP_FROM_NAME', 'Secure Bidding API'))
         end
 
         def send_to_mailtrap(payload)
