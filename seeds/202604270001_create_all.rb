@@ -38,8 +38,8 @@ Sequel.seed(:development) do
     end
 
     projects = [
-      { title: 'seed-project-alpha', budget_cents: 120_000 },
-      { title: 'seed-project-beta', budget_cents: 250_000 }
+      { title: 'seed-project-alpha', budget_cents: 120_000, state: 'published' },
+      { title: 'seed-project-beta', budget_cents: 250_000, state: 'published' }
     ].map do |project_spec|
       SecureBidding::Project.first(title: project_spec[:title]) ||
         SecureBidding::Project.create(project_spec)
