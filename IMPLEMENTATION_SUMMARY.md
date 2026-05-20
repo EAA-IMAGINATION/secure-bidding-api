@@ -2,7 +2,9 @@
 
 ## Overview
 
-Successfully implemented complete tokenized registration flow for the Secure Bidding API with three new endpoints, extended Account model, email verification service, and comprehensive test coverage.
+Successfully implemented complete tokenized registration flow for the Secure
+Bidding API with three new endpoints, extended Account model, email verification
+service, and comprehensive test coverage.
 
 ## Part A: Extended Account Model (`app/models/account.rb`)
 
@@ -45,7 +47,7 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 ### Features
 
 1. **Email Payload Building**
-   - From: MAILTRAP_FROM_EMAIL and MAILTRAP_FROM_NAME (from environment)
+   - From: MAILERTOGO_FROM_EMAIL and MAILERTOGO_FROM_NAME (from environment)
    - To: account.email
    - Subject: "Verify your registration"
 
@@ -56,11 +58,11 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
    - Token expiration notice (1 hour)
    - Account security disclaimer
 
-3. **Mailtrap Integration**
-   - POST to `https://send.api.mailtrap.io/api/send`
-   - Bearer token authentication using MAILTRAP_API_KEY
+3. **Mailer To Go Integration**
+   - Sends verification email via SMTP
+   - Uses MAILERTOGO_URL or MAILERTOGO_SMTP_* environment variables
    - Returns success/error response
-   - Raises `SendVerification::MailtrapError` on failure
+   - Raises `SendVerification::MailerToGoError` on failure
 
 ## Part C: Registration Endpoints (`app/controllers/routes/auth.rb`)
 
@@ -189,15 +191,18 @@ Successfully implemented complete tokenized registration flow for the Secure Bid
 ### Environment Configuration
 
 ```yaml
-MAILTRAP_API_KEY: "<token>"
-MAILTRAP_API_URL: "https://send.api.mailtrap.io/api/send"
-MAILTRAP_FROM_EMAIL: "noreply@secure-bidding-api.local"
-MAILTRAP_FROM_NAME: "Secure Bidding API"
+MAILERTOGO_URL: "smtp://USER:PASSWORD@smtp.us-west-1.mailertogo.net:587?authentication=plain"
+MAILERTOGO_SMTP_HOST: "smtp.us-west-1.mailertogo.net"
+MAILERTOGO_SMTP_PORT: "587"
+MAILERTOGO_SMTP_USER: "USER"
+MAILERTOGO_SMTP_PASSWORD: "PASSWORD"
+MAILERTOGO_FROM_EMAIL: "noreply@secure-bidding-api.local"
+MAILERTOGO_FROM_NAME: "Secure Bidding API"
 ```
 
 ### Dependencies
 
-- `http` gem: For Mailtrap API calls
+- `net/smtp` gem: For Mailer To Go SMTP calls
 - `securerandom`: For temporary password generation
 - `erb`: For HTML escaping in email template
 
@@ -237,7 +242,7 @@ MAILTRAP_FROM_NAME: "Secure Bidding API"
 
 ### Webmock Integration
 
-- Stubs Mailtrap API calls in test environment
+- Stubs Mailer To Go SMTP delivery in test environment
 - Verifies correct payload structure
 - Simulates success/failure scenarios
 
@@ -266,13 +271,13 @@ MAILTRAP_FROM_NAME: "Secure Bidding API"
 ### Existing (Unchanged)
 
 - `app/db/migrations/008_add_registration_and_verification_columns.rb`
-- `config/secrets-example.yml` - Already contains Mailtrap config
+- `config/secrets-example.yml` - Already contains Mailer To Go config
 
 ## Verification
 
 ### Test Results
 
-```
+```text
 149 runs, 386 assertions, 0 failures, 0 errors, 0 skips
 ```
 

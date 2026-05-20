@@ -22,7 +22,6 @@ app/db/*.db-wal
 
 # RVM
 /.rvmrc
-/.ruby-version
 /.ruby-gemset
 
 # rbenv

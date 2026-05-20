@@ -33,4 +33,15 @@ require_relative 'lib/secure_db'
 require_relative 'lib/search_hash'
 require_relative 'lib/key_stretching'
 require_relative 'lib/auth_token'
+
+auth_token_key = ENV['AUTH_TOKEN_KEY'].to_s
+if auth_token_key.empty?
+  if SecureBidding::Environment.app_env == 'production'
+    raise KeyError, 'AUTH_TOKEN_KEY must be configured in production'
+  end
+
+  auth_token_key = SecureBidding::AuthToken.generate_key
+end
+SecureBidding::AuthToken.setup(auth_token_key)
+
 require_relative 'controllers/app'
