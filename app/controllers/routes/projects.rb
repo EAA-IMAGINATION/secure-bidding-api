@@ -49,8 +49,8 @@ module SecureBidding
       end
 
       def self.list_projects(_req, _app)
-        projects = Project.order(:id).all.map do |project|
-          { id: project.id, title: project.title, budget_cents: project.budget_cents }
+        projects = Project.where(state: 'published').order(:id).all.map do |project|
+          { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
         end
         { projects: projects }
       end
@@ -91,8 +91,10 @@ module SecureBidding
 
         title = project.title
         budget_cents = project.budget_cents
+        state = project.state
         required_missing = title.to_s.strip.empty? || budget_cents.to_s.strip.empty?
         invalid_budget = !budget_cents.to_s.match?(/\A\d+\z/)
+        invalid_state = !state.nil? && !Project::VALID_STATES.include?(state)
 
         if required_missing
           app.response.status = 400
@@ -100,6 +102,9 @@ module SecureBidding
         elsif invalid_budget
           app.response.status = 400
           { error: 'budget_cents must be a non-negative integer' }
+        elsif invalid_state
+          app.response.status = 400
+          { error: "state must be 'saved' or 'published'" }
         else
           project.save
           app.class::APP_LOGGER.info("project_created id=#{project.id}")
@@ -161,7 +166,8 @@ module SecureBidding
 
         result = SecureBidding::Services::Projects::CreateBidForProject.call(
           project_id: id,
-          payload: data
+          payload: data,
+          auth_account: app.auth_account
         )
         if result[:ok]
           app.response.status = 201
@@ -179,8 +185,8 @@ module SecureBidding
         end
 
         project = Project[id]
-        if project
-          { id: project.id, title: project.title, budget_cents: project.budget_cents }
+        if project && project.state == 'published'
+          { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
         else
           app.response.status = 404
           { error: 'Project not found' }

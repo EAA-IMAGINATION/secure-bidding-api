@@ -15,8 +15,27 @@ describe 'API /api/v1/bid_submissions' do
     SecureBidding::App.freeze.app
   end
 
+  def create_account(username:, email:)
+    account = SecureBidding::Account.new(username: username, system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email(email)
+    account.save
+    account
+  end
+
+  def auth_header_for(account)
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+  end
+
   before do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
     SecureBidding::Database.migrate!
+    SecureBidding::ProjectMembership.dataset.delete if SecureBidding::Database.db.table_exists?(:project_memberships)
+    SecureBidding::Account.dataset.delete if SecureBidding::Database.db.table_exists?(:accounts)
     SecureBidding::BidSubmission.dataset.delete
     SecureBidding::Project.dataset.delete
   end
@@ -40,14 +59,15 @@ describe 'API /api/v1/bid_submissions' do
   end
 
   it 'HAPPY: returns 201 and stores encrypted payload for valid payload' do
-    project = SecureBidding::Project.create(title: 'route-project', budget_cents: 333_000)
+    project = SecureBidding::Project.create(title: 'route-project', budget_cents: 333_000, state: 'published')
+    bidder = create_account(username: 'route-bidder', email: 'route-bidder@example.com')
     payload = {
       project_id: project.id,
       contractor_alias: 'route-user',
       plaintext_bid: 'p@ssw0rd'
     }
 
-    post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
 
     _(last_response.status).must_equal 201
     response_body = JSON.parse(last_response.body)
@@ -94,7 +114,8 @@ describe 'API /api/v1/bid_submissions' do
   end
 
   it 'SAD: blocks mass assignment keys for bid submission creation' do
-    project = SecureBidding::Project.create(title: 'locked-project', budget_cents: 45_000)
+    project = SecureBidding::Project.create(title: 'locked-project', budget_cents: 45_000, state: 'published')
+    bidder = create_account(username: 'locked-bidder', email: 'locked-bidder@example.com')
     payload = {
       project_id: project.id,
       contractor_alias: 'locked-user',
@@ -102,7 +123,7 @@ describe 'API /api/v1/bid_submissions' do
       id: 'forced-id'
     }
 
-    post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -128,5 +149,36 @@ describe 'API /api/v1/bid_submissions' do
     get "/api/v1/bid_submissions/#{CGI.escape("00000000-0000-0000-0000-000000000000' OR 1=1 --")}"
 
     _(last_response.status).must_equal 404
+  end
+
+  it 'SAD: rejects bid submission for saved projects' do
+    project = SecureBidding::Project.create(title: 'saved-only-project', budget_cents: 77_000, state: 'saved')
+    bidder = create_account(username: 'saved-bidder', email: 'saved-bidder@example.com')
+    payload = {
+      project_id: project.id,
+      contractor_alias: 'blocked-bidder',
+      plaintext_bid: 'will-not-save'
+    }
+
+    post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Project is not open for bidding'
+  end
+
+  it 'SAD: rejects bid submission without login' do
+    project = SecureBidding::Project.create(title: 'login-required-project', budget_cents: 99_000, state: 'published')
+    payload = {
+      project_id: project.id,
+      contractor_alias: 'anonymous',
+      plaintext_bid: 'not-allowed'
+    }
+
+    post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Login required to bid on projects'
   end
 end
