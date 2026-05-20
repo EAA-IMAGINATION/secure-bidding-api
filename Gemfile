@@ -6,9 +6,11 @@ ruby '3.4.9'
 
 gem 'logger'
 
-gem 'figaro'
 gem 'base64'
+gem 'figaro'
+gem 'http', '~> 5.1' # HTTP client for outbound API calls
 gem 'json'
+gem 'net-smtp'
 gem 'rackup'
 gem 'rake'
 gem 'rbnacl'
@@ -16,7 +18,6 @@ gem 'roda'
 gem 'sequel'
 gem 'sequel-seed'
 gem 'sqlite3'
-gem 'http', '~> 5.1'  # HTTP client for outbound API calls
 
 group :production do
   # Use pg in production for Heroku Postgres
