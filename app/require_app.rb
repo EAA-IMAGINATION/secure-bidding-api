@@ -33,6 +33,8 @@ require_relative 'lib/secure_db'
 require_relative 'lib/search_hash'
 require_relative 'lib/key_stretching'
 require_relative 'lib/auth_token'
+require_relative 'lib/secure_messaging'
+require_relative 'lib/registration_token'
 
 # Initialize AuthToken with encryption key from environment
 SecureBidding::AuthToken.setup(ENV.fetch('AUTH_TOKEN_KEY', nil))
