@@ -26,7 +26,6 @@ app/db/*.db-wal
 /.ruby-gemset
 
 # rbenv
-.ruby-version
 
 # Bundler
 /.bundle/
