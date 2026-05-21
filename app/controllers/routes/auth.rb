@@ -27,7 +27,14 @@ module SecureBidding
         credentials = HttpRequest.new(req).body_data
         auth_account = AuthenticateAccount.call(credentials)
 
-        build_auth_payload(auth_account)
+        session_payload = {
+          account_id: auth_account.id,
+          username: auth_account.username,
+          system_role: auth_account.system_role
+        }
+        session_token = SecureBidding::AuthToken.tokenize(session_payload, SecureBidding::AuthToken::ONE_WEEK)
+
+        build_auth_payload(auth_account).merge(token: session_token)
       rescue AuthenticateAccount::UnauthorizedError => e
         log_and_halt_invalid_credentials(app, req, e)
       rescue StandardError => e
