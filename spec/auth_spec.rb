@@ -47,6 +47,8 @@ describe 'API /api/v1/auth/authenticate' do
       _(response_body['email']).must_equal 'test@example.com'
       _(response_body['system_role']).must_equal 'member'
       _(response_body).must_include 'system_roles'
+      _(response_body).must_include 'token'
+      _(response_body['token']).wont_be_nil
     end
 
     it 'returns account ID as UUID' do

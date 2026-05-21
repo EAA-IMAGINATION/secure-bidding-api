@@ -41,9 +41,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'HAPPY: creates a project with POST /api/v1/projects' do
+    account = create_account(username: 'creator1', email: 'creator1@example.com')
+    
     post '/api/v1/projects',
          { title: 'demo-project', budget_cents: 25_000 }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(account)
 
     _(last_response.status).must_equal 201
     response_body = JSON.parse(last_response.body)
@@ -54,9 +56,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'HAPPY: creates a published project when state=published is provided' do
+    account = create_account(username: 'creator2', email: 'creator2@example.com')
+    
     post '/api/v1/projects',
          { title: 'published-project', budget_cents: 33_000, state: 'published' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(account)
 
     _(last_response.status).must_equal 201
     response_body = JSON.parse(last_response.body)
@@ -100,7 +104,9 @@ describe 'API /api/v1/projects' do
   end
 
   it 'SAD: rejects invalid project payload' do
-    post '/api/v1/projects', { title: '' }.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    account = create_account(username: 'creator3', email: 'creator3@example.com')
+    
+    post '/api/v1/projects', { title: '' }.to_json, auth_header_for(account)
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -108,9 +114,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'SAD: rejects non-numeric budget_cents' do
+    account = create_account(username: 'creator4', email: 'creator4@example.com')
+    
     post '/api/v1/projects',
          { title: 'bad-budget', budget_cents: 'not-a-number' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(account)
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -118,9 +126,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'SAD: rejects invalid project state value' do
+    account = create_account(username: 'creator5', email: 'creator5@example.com')
+    
     post '/api/v1/projects',
          { title: 'bad-state', budget_cents: 10_000, state: 'archived' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(account)
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -136,10 +146,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'HAPPY: supports full cycle project -> bid submission -> project bid submissions list' do
+    creator = create_account(username: 'flow-creator', email: 'flow-creator@example.com')
     bidder = create_account(username: 'flow-bidder', email: 'flow-bidder@example.com')
     post '/api/v1/projects',
          { title: 'flow-project', budget_cents: 99_000, state: 'published' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(creator)
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
@@ -173,9 +184,11 @@ describe 'API /api/v1/projects' do
   end
 
   it 'SAD: blocks mass assignment keys for project creation' do
+    account = create_account(username: 'creator6', email: 'creator6@example.com')
+    
     post '/api/v1/projects',
          { title: 'safe-project', budget_cents: 88_000, id: 'forced-id' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(account)
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)

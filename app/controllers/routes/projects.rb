@@ -56,23 +56,33 @@ module SecureBidding
         end
       end
 
-      def self.list_projects(_req, _app)
-        projects = Project.where(state: 'published').order(:id).all.map do |project|
-          { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
+      def self.list_projects(_req, app)
+        if app.auth_account
+          # Authenticated user: return owned projects and published projects they can see
+          owner_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+          projects = Project.where(state: 'published').order(:id).all.map do |project|
+            { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
+          end
+        else
+          # Unauthenticated: return only published projects
+          projects = Project.where(state: 'published').order(:id).all.map do |project|
+            { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
+          end
         end
         { projects: projects }
       end
 
       def self.create_project(_req, app)
+        unless app.auth_account
+          app.response.status = 403
+          return { error: 'Authentication required to create projects' }
+        end
+
         payload = {}
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        if data.key?('owner_account_id')
-          create_project_with_owner(app, data)
-        else
-          create_project_from_payload(app, data)
-        end
+        create_project_from_auth_token(app, data)
       rescue Sequel::MassAssignmentRestriction
         app.log_mass_assignment_attempt('project', payload, Project.allowed_columns)
         app.response.status = 400
@@ -82,20 +92,9 @@ module SecureBidding
         { error: 'project title must be unique' }
       end
 
-      def self.create_project_with_owner(app, data)
-        result = SecureBidding::Services::Projects::CreateProjectRequirement.call(data)
-        if result[:ok]
-          app.response.status = 201
-          { id: result[:project].id, status: 'created' }
-        else
-          app.response.status = result[:status]
-          { error: result[:error] }
-        end
-      end
-
-      def self.create_project_from_payload(app, payload)
+      def self.create_project_from_auth_token(app, data)
         project = Project.new
-        project.set(payload.transform_keys(&:to_sym))
+        project.set(data.transform_keys(&:to_sym))
 
         title = project.title
         budget_cents = project.budget_cents
@@ -115,7 +114,17 @@ module SecureBidding
           { error: "state must be 'saved' or 'published'" }
         else
           project.save
-          app.class::APP_LOGGER.info("project_created id=#{project.id}")
+          
+          # Set owner as the authenticated account
+          owner_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+          role = SecureBidding::Role.first(name: 'project_owner')
+          SecureBidding::ProjectMembership.create(
+            account_id: owner_account_id,
+            project_id: project.id,
+            role_id: role.id
+          )
+
+          app.class::APP_LOGGER.info("project_created id=#{project.id} owner=#{owner_account_id}")
           app.response.status = 201
           { id: project.id, status: 'created' }
         end
@@ -224,9 +233,9 @@ module SecureBidding
       end
 
       def self.update_project(_req, app, id)
-        unless admin?(app)
+        unless admin?(app) || owns_project?(app, id)
           app.response.status = 403
-          return { error: 'Forbidden: only admins can update projects' }
+          return { error: 'Forbidden: only project owner or admin can update this project' }
         end
 
         unless app.valid_uuid?(id)
@@ -261,9 +270,9 @@ module SecureBidding
       end
 
       def self.delete_project(_req, app, id)
-        unless admin?(app)
+        unless admin?(app) || owns_project?(app, id)
           app.response.status = 403
-          return { error: 'Forbidden: only admins can delete projects' }
+          return { error: 'Forbidden: only project owner or admin can delete this project' }
         end
 
         unless app.valid_uuid?(id)
@@ -290,6 +299,24 @@ module SecureBidding
         else
           auth.system_role == 'admin'
         end
+      end
+
+      def self.owns_project?(app, project_id)
+        return false unless app.auth_account
+
+        account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+        project = Project[project_id]
+        return false if project.nil?
+
+        membership = ProjectMembership.where(
+          project_id: project_id,
+          account_id: account_id
+        ).first
+
+        return false if membership.nil?
+
+        role = membership.role
+        role.name == 'project_owner'
       end
     end
   end

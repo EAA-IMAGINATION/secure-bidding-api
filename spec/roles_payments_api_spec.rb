@@ -43,6 +43,12 @@ describe 'API role and payment placeholders' do
     SecureBidding::Project.dataset.delete
     SecureBidding::AccountProject.dataset.delete
     SecureBidding::Account.dataset.delete
+
+    # Create admin account for role assignments
+    @admin = SecureBidding::Account.new(username: 'admin-user', system_role: 'admin')
+    @admin.set_password('admin-password')
+    @admin.set_email('admin@example.com')
+    @admin.save
   end
 
   it 'HAPPY: assigns and lists system roles for an account' do
@@ -50,7 +56,7 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{account.id}/system_roles",
          { role: 'system_admin' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
 
     _(last_response.status).must_equal 201
 
@@ -65,16 +71,15 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{owner.id}/system_roles",
          { role: 'project_owner' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
     _(last_response.status).must_equal 201
 
     post '/api/v1/projects',
          {
            title: 'owner-scoped-project',
-           budget_cents: 100_000,
-           owner_account_id: owner.id
+           budget_cents: 100_000
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
 
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
@@ -92,17 +97,16 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{owner.id}/system_roles",
          { role: 'project_owner' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
     _(last_response.status).must_equal 201
 
     post '/api/v1/projects',
          {
            title: 'bid-project',
            budget_cents: 200_000,
-           owner_account_id: owner.id,
            state: 'published'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
@@ -125,16 +129,15 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{owner.id}/system_roles",
          { role: 'project_owner' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
     _(last_response.status).must_equal 201
 
     post '/api/v1/projects',
          {
            title: 'restricted-bid-project',
-           budget_cents: 300_000,
-           owner_account_id: owner.id
+           budget_cents: 300_000
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
@@ -156,17 +159,16 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{owner.id}/system_roles",
          { role: 'project_owner' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
     _(last_response.status).must_equal 201
 
     post '/api/v1/projects',
          {
            title: 'self-owned-project',
            budget_cents: 310_000,
-           owner_account_id: owner.id,
            state: 'published'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
@@ -189,17 +191,16 @@ describe 'API role and payment placeholders' do
 
     post "/api/v1/accounts/#{owner.id}/system_roles",
          { role: 'project_owner' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(@admin)
     _(last_response.status).must_equal 201
 
     post '/api/v1/projects',
          {
            title: 'payment-project',
            budget_cents: 400_000,
-           owner_account_id: owner.id,
            state: 'published'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
