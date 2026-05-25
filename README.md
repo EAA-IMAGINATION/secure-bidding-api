@@ -167,16 +167,23 @@ Assign role to account (system scope):
 ```bash
 curl -X POST http://localhost:3000/api/v1/accounts/ACCOUNT_ID/system_roles \
   -H "Content-Type: application/json" \
-  -d '{"role":"project_owner"}'
+  -H "Authorization: Bearer ADMIN_TOKEN" \
+  -d '{"role":"admin"}'
 ```
+
+Use `"role":"admin"` to promote a member account to an admin account.
 
 Assign account to project (project scope):
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/memberships \
   -H "Content-Type: application/json" \
-  -d '{"account_id":"ACCOUNT_ID","role":"bidder"}'
+  -H "Authorization: Bearer OWNER_OR_ADMIN_TOKEN" \
+  -d '{"account_id":"ACCOUNT_ID","role":"project_owner"}'
 ```
+
+Project owners can add another account as `project_owner` to create a co-owner
+collaboration. Co-owners have the same owner-level permissions on that project.
 
 Create project bid as assigned bidder:
 
@@ -267,14 +274,15 @@ bundle exec rake spec
 - `GET /api/v1/accounts/search`
 - `GET /api/v1/accounts/:id`
 - `POST /api/v1/accounts`
-- `PATCH /api/v1/accounts/:id`
+- `PATCH /api/v1/accounts/:id` (admin can update any account; users can update
+  own username/email/password)
 - `GET /api/v1/accounts/:id/system_roles`
 - `POST /api/v1/accounts/:id/system_roles`
 - `GET /api/v1/projects` (published projects only)
 - `GET /api/v1/projects/:id` (published projects only)
 - `POST /api/v1/projects` (`state`: `saved` or `published`, defaults to `saved`)
 - `GET /api/v1/projects/:id/memberships`
-- `POST /api/v1/projects/:id/memberships`
+- `POST /api/v1/projects/:id/memberships` (owner/admin only; supports co-owner assignment)
 - `POST /api/v1/projects/:id/bids`
 - `GET /api/v1/projects/:id/bid_submissions`
 - `GET /api/v1/bid_submissions`

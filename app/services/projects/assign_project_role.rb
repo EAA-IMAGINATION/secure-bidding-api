@@ -31,6 +31,19 @@ module SecureBidding
             role_id: role.id
           )
 
+          if normalized_role == 'project_owner'
+            collaboration = SecureBidding::AccountProject.first(account_id: account.id, project_id: project.id)
+            if collaboration
+              collaboration.update(collaboration_role: 'owner') unless collaboration.collaboration_role == 'owner'
+            else
+              SecureBidding::AccountProject.create(
+                account_id: account.id,
+                project_id: project.id,
+                collaboration_role: 'owner'
+              )
+            end
+          end
+
           { ok: true, membership: membership, role: role.name }
         end
       end
