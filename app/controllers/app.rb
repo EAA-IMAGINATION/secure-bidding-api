@@ -105,7 +105,8 @@ module SecureBidding
     route do |r|
       # CORS headers for cross-origin requests
       # Prefer explicit CORS_ORIGIN; otherwise echo request Origin when present.
-      request_origin = r.request.env['HTTP_ORIGIN']
+      # Use r.env (Rack env) which is always available in Roda route blocks
+      request_origin = r.env['HTTP_ORIGIN'] || (r.request.env['HTTP_ORIGIN'] if r.respond_to?(:request) && r.request.respond_to?(:env))
       allowed_origin = ENV['CORS_ORIGIN'] || request_origin || '*'
       r.response.headers["Access-Control-Allow-Origin"] = allowed_origin
       r.response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
