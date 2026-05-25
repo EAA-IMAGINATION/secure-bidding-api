@@ -324,7 +324,7 @@ describe 'API /api/v1/projects' do
     _(response_body['error']).must_include 'budget_cents must be a non-negative integer'
   end
 
-  it 'HAPPY: project owner can add a co-owner collaboration' do
+  it 'HAPPY: owner-created co-owner request stays pending until collaborator accepts' do
     owner = create_account(username: 'owner-collab', email: 'owner-collab@example.com')
     co_owner = create_account(username: 'co-owner-collab', email: 'co-owner-collab@example.com')
 
@@ -338,6 +338,57 @@ describe 'API /api/v1/projects' do
          { account_id: co_owner.id, role: 'project_owner' }.to_json,
          auth_header_for(owner)
 
+    _(last_response.status).must_equal 202
+    request_body = JSON.parse(last_response.body)
+    _(request_body['role']).must_equal 'project_owner'
+    _(request_body['status']).must_equal 'pending'
+
+    collaboration = SecureBidding::AccountProject.first(account_id: co_owner.id, project_id: project_id)
+    _(collaboration).wont_be_nil
+    _(collaboration.collaboration_role).must_equal 'pending_owner'
+
+    pending_membership = SecureBidding::ProjectMembership.join(:roles, id: :role_id)
+                                                        .where(
+                                                          Sequel[:project_memberships][:account_id] => co_owner.id,
+                                                          Sequel[:project_memberships][:project_id] => project_id,
+                                                          Sequel[:roles][:name] => 'project_owner'
+                                                        ).first
+    _(pending_membership).must_be_nil
+
+    patch "/api/v1/projects/#{project_id}",
+          { title: 'collab-project-updated' }.to_json,
+          auth_header_for(co_owner)
+    _(last_response.status).must_equal 403
+
+    post "/api/v1/projects/#{project_id}/memberships/accept", {}.to_json, auth_header_for(co_owner)
+    _(last_response.status).must_equal 200
+
+    accepted = SecureBidding::AccountProject.first(account_id: co_owner.id, project_id: project_id)
+    _(accepted.collaboration_role).must_equal 'owner'
+
+    patch "/api/v1/projects/#{project_id}",
+          { title: 'collab-project-updated' }.to_json,
+          auth_header_for(co_owner)
+    _(last_response.status).must_equal 200
+  end
+
+  it 'HAPPY: admin can assign co-owner immediately without pending acceptance' do
+    admin = create_account(username: 'collab-admin', email: 'collab-admin@example.com')
+    admin.system_role = 'admin'
+    admin.save
+    owner = create_account(username: 'owner-direct-admin', email: 'owner-direct-admin@example.com')
+    co_owner = create_account(username: 'co-owner-direct-admin', email: 'co-owner-direct-admin@example.com')
+
+    post '/api/v1/projects',
+         { title: 'admin-collab-project', budget_cents: 91_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { account_id: co_owner.id, role: 'project_owner' }.to_json,
+         auth_header_for(admin)
+
     _(last_response.status).must_equal 201
     membership_body = JSON.parse(last_response.body)
     _(membership_body['role']).must_equal 'project_owner'
@@ -345,11 +396,23 @@ describe 'API /api/v1/projects' do
     collaboration = SecureBidding::AccountProject.first(account_id: co_owner.id, project_id: project_id)
     _(collaboration).wont_be_nil
     _(collaboration.collaboration_role).must_equal 'owner'
+  end
 
-    patch "/api/v1/projects/#{project_id}",
-          { title: 'collab-project-updated' }.to_json,
-          auth_header_for(co_owner)
-    _(last_response.status).must_equal 200
+  it 'SAD: collaborator cannot accept ownership without pending request' do
+    owner = create_account(username: 'owner-no-pending', email: 'owner-no-pending@example.com')
+    other = create_account(username: 'other-no-pending', email: 'other-no-pending@example.com')
+
+    post '/api/v1/projects',
+         { title: 'no-pending-project', budget_cents: 92_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships/accept", {}.to_json, auth_header_for(other)
+
+    _(last_response.status).must_equal 404
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'No pending ownership request found'
   end
 
   it 'SAD: non-owner cannot add project memberships' do
