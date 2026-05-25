@@ -152,9 +152,10 @@ module SecureBidding
       end
 
       def self.update_account(_req, app, id)
-        unless admin?(app)
+        can_update = admin?(app) || account_owner?(app, id)
+        unless can_update
           app.response.status = 403
-          return { error: 'Forbidden: only admins can update accounts' }
+          return { error: 'Forbidden: only admins or account owner can update account' }
         end
 
         unless app.valid_uuid?(id)
@@ -170,7 +171,11 @@ module SecureBidding
           data = app.parse_json_request_body
           return data if app.response.status == 400
 
-          result = SecureBidding::Services::Accounts::UpdateAccount.call(account, data)
+          result = SecureBidding::Services::Accounts::UpdateAccount.call(
+            account,
+            data,
+            allow_system_role: admin?(app)
+          )
           if result[:ok]
             { id: result[:account].id, status: 'updated' }
           else
@@ -211,6 +216,18 @@ module SecureBidding
         else
           auth.system_role == 'admin'
         end
+      end
+
+      def self.account_owner?(app, account_id)
+        auth = app.auth_account
+        return false unless auth
+
+        auth_account_id = if auth.is_a?(Hash)
+                            auth['account_id'] || auth[:account_id]
+                          else
+                            auth.id
+                          end
+        auth_account_id == account_id
       end
     end
   end
