@@ -123,6 +123,11 @@ module SecureBidding
             project_id: project.id,
             role_id: role.id
           )
+          SecureBidding::AccountProject.create(
+            account_id: owner_account_id,
+            project_id: project.id,
+            collaboration_role: 'owner'
+          )
 
           app.class::APP_LOGGER.info("project_created id=#{project.id} owner=#{owner_account_id}")
           app.response.status = 201
@@ -153,6 +158,11 @@ module SecureBidding
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Project not found' }
+        end
+
+        unless admin?(app) || owns_project?(app, id)
+          app.response.status = 403
+          return { error: 'Forbidden: only project owner or admin can manage project memberships' }
         end
 
         data = app.parse_json_request_body
@@ -313,10 +323,18 @@ module SecureBidding
           account_id: account_id
         ).first
 
-        return false if membership.nil?
+        if membership
+          role = membership.role
+          return true if role.name == 'project_owner'
+        end
 
-        role = membership.role
-        role.name == 'project_owner'
+        collaboration = SecureBidding::AccountProject.first(
+          project_id: project_id,
+          account_id: account_id
+        )
+        return false if collaboration.nil?
+
+        collaboration.collaboration_role == 'owner'
       end
     end
   end

@@ -180,6 +180,59 @@ describe 'API /api/v1/accounts' do
     _(updated.phone).must_equal '+886911222333'
   end
 
+  it 'HAPPY: member can update own username email and password' do
+    account = SecureBidding::Account.new(username: 'self-update-user', system_role: 'member')
+    account.set_password('old-secret-pass')
+    account.set_email('self-update-user@example.com')
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    patch "/api/v1/accounts/#{account.id}",
+          {
+            username: 'self-update-user-renamed',
+            email: 'self-update-user-renamed@example.com',
+            password: 'new-secret-pass'
+          }.to_json,
+          headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['status']).must_equal 'updated'
+
+    updated = SecureBidding::Account[account.id]
+    _(updated.username).must_equal 'self-update-user-renamed'
+    _(updated.email).must_equal 'self-update-user-renamed@example.com'
+    _(updated.check_password('new-secret-pass')).must_equal true
+    _(updated.check_password('old-secret-pass')).must_equal false
+  end
+
+  it 'SAD: member cannot promote self with account update' do
+    account = SecureBidding::Account.new(username: 'self-escalation-user', system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email('self-escalation-user@example.com')
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    patch "/api/v1/accounts/#{account.id}",
+          { system_role: 'admin' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Forbidden: account owner cannot change system role'
+    _(SecureBidding::Account[account.id].system_role).must_equal 'member'
+  end
+
   it 'SAD: rejects account update without updatable fields' do
     admin = SecureBidding::Account.new(username: 'no-update-admin', system_role: 'admin')
     admin.set_password('my-secret-pass')
@@ -338,6 +391,35 @@ describe 'API /api/v1/accounts' do
          headers
 
     _(last_response.status).must_equal 403
+  end
+
+  it 'HAPPY: admin can promote a member to admin with system_roles endpoint' do
+    admin = SecureBidding::Account.new(username: 'promote-admin', system_role: 'admin')
+    admin.set_password('my-secret-pass')
+    admin.set_email('promote-admin@example.com')
+    admin.save
+
+    target = SecureBidding::Account.new(username: 'promote-target', system_role: 'member')
+    target.set_password('my-secret-pass')
+    target.set_email('promote-target@example.com')
+    target.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: admin.id, username: admin.username, system_role: admin.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    post "/api/v1/accounts/#{target.id}/system_roles",
+         { role: 'admin' }.to_json,
+         headers
+
+    _(last_response.status).must_equal 201
+    response_body = JSON.parse(last_response.body)
+    _(response_body['status']).must_equal 'assigned'
+
+    promoted = SecureBidding::Account[target.id]
+    _(promoted.system_role).must_equal 'admin'
   end
 end
 # rubocop:enable Metrics/BlockLength
