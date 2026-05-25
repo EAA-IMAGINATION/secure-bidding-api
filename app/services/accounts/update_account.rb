@@ -5,23 +5,26 @@ module SecureBidding
     module Accounts
       # Updates account resources through explicit mutable fields.
       class UpdateAccount
-        ALLOWED_KEYS = %w[password email phone system_role].freeze
+        ALLOWED_KEYS = %w[username password email phone system_role].freeze
 
         # rubocop:disable Metrics/AbcSize, Metrics/CyclomaticComplexity, Metrics/MethodLength, Metrics/PerceivedComplexity
-        def self.call(account, payload)
-          new(account, payload).call
+        def self.call(account, payload, allow_system_role: true)
+          new(account, payload, allow_system_role: allow_system_role).call
         end
 
-        def initialize(account, payload)
+        def initialize(account, payload, allow_system_role:)
           @account = account
           @payload = payload || {}
+          @allow_system_role = allow_system_role
         end
 
         def call
           return error(400, 'Invalid account attributes') unless valid_keys?
           return error(400, 'At least one updatable field is required') unless mutation?
+          return error(403, 'Forbidden: account owner cannot change system role') if forbidden_system_role?
           return error(400, 'system_role must be admin or member') if invalid_role?
 
+          account.username = username unless username.nil?
           account.system_role = system_role unless system_role.nil?
           account.set_password(password) unless password.nil?
           account.set_email(email) unless email.nil?
@@ -35,18 +38,27 @@ module SecureBidding
 
         private
 
-        attr_reader :account, :payload
+        attr_reader :account, :payload, :allow_system_role
 
         def valid_keys?
           (payload.keys.map(&:to_s) - ALLOWED_KEYS).empty?
         end
 
         def mutation?
-          [password, email, phone, system_role].any? { |value| !value.nil? }
+          [username, password, email, phone, system_role].any? { |value| !value.nil? }
+        end
+
+        def forbidden_system_role?
+          !allow_system_role && !system_role.nil?
         end
 
         def invalid_role?
           !system_role.nil? && !SecureBidding::Account::VALID_ROLES.include?(system_role.to_s)
+        end
+
+        def username
+          value = payload['username'] || payload[:username]
+          value if !value.nil? && !value.to_s.strip.empty?
         end
 
         def password

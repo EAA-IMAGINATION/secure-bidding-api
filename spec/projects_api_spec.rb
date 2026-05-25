@@ -323,4 +323,52 @@ describe 'API /api/v1/projects' do
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_include 'budget_cents must be a non-negative integer'
   end
+
+  it 'HAPPY: project owner can add a co-owner collaboration' do
+    owner = create_account(username: 'owner-collab', email: 'owner-collab@example.com')
+    co_owner = create_account(username: 'co-owner-collab', email: 'co-owner-collab@example.com')
+
+    post '/api/v1/projects',
+         { title: 'collab-project', budget_cents: 90_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { account_id: co_owner.id, role: 'project_owner' }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 201
+    membership_body = JSON.parse(last_response.body)
+    _(membership_body['role']).must_equal 'project_owner'
+
+    collaboration = SecureBidding::AccountProject.first(account_id: co_owner.id, project_id: project_id)
+    _(collaboration).wont_be_nil
+    _(collaboration.collaboration_role).must_equal 'owner'
+
+    patch "/api/v1/projects/#{project_id}",
+          { title: 'collab-project-updated' }.to_json,
+          auth_header_for(co_owner)
+    _(last_response.status).must_equal 200
+  end
+
+  it 'SAD: non-owner cannot add project memberships' do
+    owner = create_account(username: 'owner-forbidden', email: 'owner-forbidden@example.com')
+    outsider = create_account(username: 'outsider-forbidden', email: 'outsider-forbidden@example.com')
+    target = create_account(username: 'target-forbidden', email: 'target-forbidden@example.com')
+
+    post '/api/v1/projects',
+         { title: 'locked-memberships', budget_cents: 95_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { account_id: target.id, role: 'project_owner' }.to_json,
+         auth_header_for(outsider)
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Forbidden: only project owner or admin can manage project memberships'
+  end
 end

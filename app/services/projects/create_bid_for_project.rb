@@ -41,13 +41,20 @@ module SecureBidding
 
         def self.owner_of_project?(project_id, account_id)
           owner_role = SecureBidding::Role.first(name: 'project_owner')
-          return false if owner_role.nil?
+          if owner_role
+            owner_membership = SecureBidding::ProjectMembership.first(
+              account_id: account_id,
+              project_id: project_id,
+              role_id: owner_role.id
+            )
+            return true unless owner_membership.nil?
+          end
 
-          SecureBidding::ProjectMembership.first(
+          collaboration = SecureBidding::AccountProject.first(
             account_id: account_id,
-            project_id: project_id,
-            role_id: owner_role.id
-          ) != nil
+            project_id: project_id
+          )
+          !collaboration.nil? && collaboration.collaboration_role == 'owner'
         end
       end
     end
