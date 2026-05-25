@@ -12,8 +12,12 @@ module SecureBidding
     end
 
     def database_url(env = app_env)
+      # Prefer an explicit DATABASE_URL (e.g., provided by Heroku). Check it first
+      return ENV['DATABASE_URL'] if ENV['DATABASE_URL'] && !ENV['DATABASE_URL'].to_s.strip.empty?
+
+      # Fallback to secrets file values, then to local sqlite file
       load_secrets!(env)
-      ENV.delete('DATABASE_URL') || "sqlite://app/db/#{env}.db"
+      ENV['DATABASE_URL'] || "sqlite://app/db/#{env}.db"
     end
 
     def load_secrets!(env = app_env)
