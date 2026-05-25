@@ -1,0 +1,47 @@
+name: "Policy: Commit Trailers & Route→Spec Report"
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  check_trailers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Check for forbidden Co-authored-by trailers
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Event: $GITHUB_EVENT_NAME"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="origin/${{ github.event.pull_request.base.ref }}"
+            git fetch origin "${{ github.event.pull_request.base.ref }}" --depth=1 || true
+          else
+            BASE_REF="origin/main"
+            git fetch origin main --depth=1 || true
+          fi
+          git rev-parse --verify "$BASE_REF" >/dev/null 2>&1 || BASE_REF=$(git rev-parse --verify HEAD~50)
+          echo "Comparing $BASE_REF..HEAD"
+          if git log --pretty=%B "$BASE_REF"..HEAD | grep -i -n 'Co-authored-by:.*copilot' >/dev/null 2>&1; then
+            echo "Forbidden Co-authored-by trailer referencing Copilot found in commit messages. Please remove it."
+            git log --pretty=%B "$BASE_REF"..HEAD | grep -i -n --color=always 'Co-authored-by:.*copilot' || true
+            exit 1
+          fi
+          echo "No forbidden trailers found."
+
+  route_spec_coverage:
+    runs-on: ubuntu-latest
+    needs: check_trailers
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - name: Install bundler and gems
+        run: |
+          gem install bundler
+          bundle install --jobs 4 --retry 3
+      - name: Run route→spec coverage report
+        run: bundle exec rake route_spec_coverage
