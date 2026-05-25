@@ -1,0 +1,33 @@
+AllCops:
+  TargetRubyVersion: 3.3
+
+# Relax metric cops for route modules which are naturally routing DSLs and
+# contain many small blocks. Keeping strict thresholds here creates churn.
+Metrics/MethodLength:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+Metrics/AbcSize:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+Metrics/BlockLength:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+Metrics/ModuleLength:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+
+# Documentation comments for every module are optional for route files
+Style/Documentation:
+  Exclude:
+    - 'app/controllers/routes/**/*'
+
+# Allow shorter method parameter names inside route modules
+Naming/MethodParameterName:
+  Exclude:
+    - 'app/controllers/routes/**/*'
