@@ -11,7 +11,7 @@ Secure Bidding API is a Ruby/Roda service with:
 Run from the repository root:
 
 ```bash
-bundle exec rake start
+# bundle exec rake start
 ```
 
 This will install dependencies, configure secrets, migrate the database, seed it
