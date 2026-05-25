@@ -94,7 +94,8 @@ Sequel.seed(:development) do
             'bidder_account_id' => bid_spec[:bidder_account_id],
             'contractor_alias' => bid_spec[:contractor_alias],
             'plaintext_bid' => bid_spec[:plaintext_bid]
-          }
+          },
+          auth_account: { account_id: bid_spec[:bidder_account_id] }
         )
         raise "Bid seed failed for #{bid_spec[:contractor_alias]}: #{result[:error]}" unless result[:ok]
 
