@@ -182,8 +182,18 @@ curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/memberships \
   -d '{"account_id":"ACCOUNT_ID","role":"project_owner"}'
 ```
 
-Project owners can add another account as `project_owner` to create a co-owner
-collaboration. Co-owners have the same owner-level permissions on that project.
+If an **admin** sends this request, co-owner access is granted immediately.
+If a regular owner sends this request, it creates a `pending` ownership request.
+The invited collaborator must accept first:
+
+```bash
+curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/memberships/accept \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer INVITED_COLLABORATOR_TOKEN" \
+  -d '{}'
+```
+
+After acceptance, the collaborator becomes a full co-owner.
 
 Create project bid as assigned bidder:
 
@@ -283,6 +293,8 @@ bundle exec rake spec
 - `POST /api/v1/projects` (`state`: `saved` or `published`, defaults to `saved`)
 - `GET /api/v1/projects/:id/memberships`
 - `POST /api/v1/projects/:id/memberships` (owner/admin only; supports co-owner assignment)
+- `POST /api/v1/projects/:id/memberships/accept` (invited collaborator accepts
+  pending co-owner request)
 - `POST /api/v1/projects/:id/bids`
 - `GET /api/v1/projects/:id/bid_submissions`
 - `GET /api/v1/bid_submissions`
