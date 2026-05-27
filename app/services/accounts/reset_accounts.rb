@@ -27,6 +27,11 @@ module SecureBidding
             raise Sequel::Rollback unless result[:ok]
           end
 
+          # Mark seeded admin as verified so seed accounts are usable without email flow
+          if result && result[:ok] && result[:account] && result[:account].email_verified_at.nil?
+            result[:account].verify_email!
+          end
+
           result
         end
 
