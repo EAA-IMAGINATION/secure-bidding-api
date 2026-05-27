@@ -27,9 +27,26 @@ module SecureBidding
           account.username = username unless username.nil?
           account.system_role = system_role unless system_role.nil?
           account.set_password(password) unless password.nil?
-          account.set_email(email) unless email.nil?
+
+          registration_token = nil
+          unless email.nil?
+            # If the email is changing, set a registration token and clear verification
+            if account.email != email
+              account.set_email(email)
+              account.set_registration_token
+              account.email_verified_at = nil
+              registration_token = account.registration_token
+            else
+              account.set_email(email)
+            end
+          end
+
           account.set_phone(phone) unless phone.nil?
           account.save
+
+          result = { ok: true, account: account }
+          result[:registration_token] = registration_token if registration_token
+          result
           { ok: true, account: account }
         rescue Sequel::UniqueConstraintViolation
           error(400, 'username, email, or phone already exists')
