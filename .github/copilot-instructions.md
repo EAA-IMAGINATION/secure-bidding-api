@@ -12,6 +12,10 @@
 
 ## Project Skills and Rules
 
+**Highest-priority commit rule:** Before creating or amending any commit,
+check the Commit Authorship Skill first. The repo rejects AI co-author
+trailers, and the local hook is expected to strip them before commit.
+
 ### 1. Feature Branch Workflow
 
 **Rule:** Never work directly from `main`/`master`.
