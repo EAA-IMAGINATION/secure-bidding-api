@@ -186,9 +186,8 @@ module SecureBidding
                   verification_url: verification_url
                 )
               rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
+                # Log the email error but do not fail the account update; verification can be retried
                 app.class::APP_LOGGER.error("Email service error: #{e.message}")
-                app.response.status = 500
-                return { error: 'Failed to send verification email' }
               end
             end
 
