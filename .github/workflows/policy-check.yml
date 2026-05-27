@@ -39,9 +39,10 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - name: Install bundler and gems
-        run: |
-          gem install bundler
-          bundle install --jobs 4 --retry 3
+      - uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+      - name: Install gems
+        run: bundle install --jobs 4 --retry 3
       - name: Run route→spec coverage report
         run: bundle exec rake route_spec_coverage
