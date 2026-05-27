@@ -47,7 +47,6 @@ module SecureBidding
           result = { ok: true, account: account }
           result[:registration_token] = registration_token if registration_token
           result
-          { ok: true, account: account }
         rescue Sequel::UniqueConstraintViolation
           error(400, 'username, email, or phone already exists')
         end
