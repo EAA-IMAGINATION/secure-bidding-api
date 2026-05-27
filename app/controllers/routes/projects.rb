@@ -65,7 +65,6 @@ module SecureBidding
       def self.list_projects(_req, app)
         if app.auth_account
           # Authenticated user: return owned projects and published projects they can see
-          owner_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
           projects = Project.where(state: 'published').order(:id).all.map do |project|
             { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
           end
