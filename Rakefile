@@ -170,7 +170,13 @@ namespace :db do
     result = SecureBidding::Services::Accounts::UpdateAccount.call(account, system_role: 'admin')
 
     if result.is_a?(Hash) && result[:ok]
-      puts "Assigned system_role admin to account #{account.username} (#{account.id})"
+      # Ensure account is marked verified when promoting to admin via bootstrap task
+      if account.email_verified_at.nil?
+        account.verify_email!
+        puts "Assigned system_role admin and verified email for account #{account.username} (#{account.id})"
+      else
+        puts "Assigned system_role admin to account #{account.username} (#{account.id})"
+      end
     else
       puts "Failed to assign role: #{result[:error] || 'unknown error'}"
       exit 1
