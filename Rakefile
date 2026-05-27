@@ -167,7 +167,8 @@ namespace :db do
       exit 1
     end
 
-    result = SecureBidding::Services::Accounts::UpdateAccount.call(account, system_role: 'admin')
+    # Use UpdateAccount service correctly by passing a payload hash
+    result = SecureBidding::Services::Accounts::UpdateAccount.call(account, { 'system_role' => 'admin' })
 
     if result.is_a?(Hash) && result[:ok]
       # Ensure account is marked verified when promoting to admin via bootstrap task
