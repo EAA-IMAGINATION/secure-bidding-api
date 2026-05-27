@@ -12,6 +12,14 @@ module SecureBidding
       # In production, enforce HTTPS; in development/test allow HTTP
       return true if ['test', 'development'].include?(ENV['RACK_ENV'])
 
+      # Heroku and other proxies set X-Forwarded-Proto. Trust it when present.
+      forwarded_proto = @routing.env['HTTP_X_FORWARDED_PROTO'] || @routing.env['X-Forwarded-Proto'] || @routing.env['rack.url_scheme']
+      if forwarded_proto && !forwarded_proto.to_s.empty?
+        # X-Forwarded-Proto may contain a comma-separated list; check the first value
+        proto = forwarded_proto.to_s.split(',').first.strip
+        return true if proto.casecmp('https').zero?
+      end
+
       @routing.scheme.casecmp('https').zero?
     end
 

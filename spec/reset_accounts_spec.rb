@@ -34,7 +34,8 @@ describe 'SecureBidding::Services::Accounts::ResetAccounts' do
     SecureBidding::Services::Projects::AssignProjectRole.call(
       account_id: legacy_account.id,
       project_id: project.id,
-      role_name: 'project_owner'
+      role_name: 'project_owner',
+      requested_by_admin: true
     )
 
     result = SecureBidding::Services::Accounts::ResetAccounts.call(

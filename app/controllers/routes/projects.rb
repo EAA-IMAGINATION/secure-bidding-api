@@ -25,6 +25,12 @@ module SecureBidding
               list_project_memberships(req, app, id)
             end
 
+            req.on 'accept' do
+              req.post true do
+                accept_project_ownership_request(req, app, id)
+              end
+            end
+
             req.post true do
               assign_project_role(req, app, id)
             end
@@ -59,7 +65,6 @@ module SecureBidding
       def self.list_projects(_req, app)
         if app.auth_account
           # Authenticated user: return owned projects and published projects they can see
-          owner_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
           projects = Project.where(state: 'published').order(:id).all.map do |project|
             { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
           end
@@ -171,15 +176,63 @@ module SecureBidding
         result = SecureBidding::Services::Projects::AssignProjectRole.call(
           project_id: id,
           account_id: data['account_id'],
-          role_name: data['role']
+          role_name: data['role'],
+          requested_by_admin: admin?(app)
         )
         if result[:ok]
+          if result[:pending]
+            app.response.status = 202
+            return result[:request]
+          end
+
           app.response.status = 201
           app.project_membership_response(result[:membership])
         else
           app.response.status = result[:status]
           { error: result[:error] }
         end
+      end
+
+      def self.accept_project_ownership_request(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        unless app.auth_account
+          app.response.status = 403
+          return { error: 'Authentication required to accept ownership request' }
+        end
+
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+        collaboration = SecureBidding::AccountProject.first(
+          account_id: account_id,
+          project_id: id
+        )
+        if collaboration.nil? || collaboration.collaboration_role != 'pending_owner'
+          app.response.status = 404
+          return { error: 'No pending ownership request found' }
+        end
+
+        owner_role = SecureBidding::Role.first(name: 'project_owner')
+        membership = SecureBidding::ProjectMembership.first(
+          account_id: account_id,
+          project_id: id,
+          role_id: owner_role.id
+        ) || SecureBidding::ProjectMembership.create(
+          account_id: account_id,
+          project_id: id,
+          role_id: owner_role.id
+        )
+        collaboration.update(collaboration_role: 'owner')
+
+        app.project_membership_response(membership)
       end
 
       def self.create_bid_for_project(_req, app, id)

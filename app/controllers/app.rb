@@ -104,10 +104,15 @@ module SecureBidding
     # rubocop:disable Metrics/BlockLength
     route do |r|
       # CORS headers for cross-origin requests
-      r.response.headers["Access-Control-Allow-Origin"] = ENV.fetch("CORS_ORIGIN", "*")
+      # Prefer explicit CORS_ORIGIN; otherwise echo request Origin when present.
+      # Use r.env (Rack env) which is always available in Roda route blocks
+      request_origin = r.env['HTTP_ORIGIN'] || (r.request.env['HTTP_ORIGIN'] if r.respond_to?(:request) && r.request.respond_to?(:env))
+      allowed_origin = ENV['CORS_ORIGIN'] || request_origin || '*'
+      r.response.headers["Access-Control-Allow-Origin"] = allowed_origin
       r.response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, PATCH, OPTIONS"
       r.response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
-      r.response.headers["Access-Control-Allow-Credentials"] = "true"
+      # Only allow credentials when we have an explicit origin (not '*')
+      r.response.headers["Access-Control-Allow-Credentials"] = "true" unless allowed_origin == '*'
 
       # Handle preflight requests
       if r.request_method == "OPTIONS"
