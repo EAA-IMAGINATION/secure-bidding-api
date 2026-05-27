@@ -45,6 +45,7 @@ describe 'API /api/v1/auth registration endpoints' do
   end
 
   def with_mailer_togo_env
+    original = {}
     original = {
       'MAILERTOGO_URL' => ENV['MAILERTOGO_URL'],
       'MAILERTOGO_FROM_EMAIL' => ENV['MAILERTOGO_FROM_EMAIL'],
