@@ -177,6 +177,20 @@ module SecureBidding
             allow_system_role: admin?(app)
           )
           if result[:ok]
+            if result[:registration_token]
+              verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
+              begin
+                SecureBidding::Services::Email::SendVerification.call(
+                  account: result[:account],
+                  registration_token: result[:registration_token],
+                  verification_url: verification_url
+                )
+              rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
+                # Log the email error but do not fail the account update; verification can be retried
+                app.class::APP_LOGGER.error("Email service error: #{e.message}")
+              end
+            end
+
             { id: result[:account].id, status: 'updated' }
           else
             app.response.status = result[:status]

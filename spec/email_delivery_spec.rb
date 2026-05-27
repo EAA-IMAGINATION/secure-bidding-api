@@ -52,13 +52,14 @@ describe 'Mailer To Go SMTP delivery' do
   end
 
   def with_smtp_stub(fake_smtp)
+    original_new = nil
     original_new = Net::SMTP.method(:new)
     Net::SMTP.define_singleton_method(:new) do |_host, _port|
       fake_smtp
     end
     yield
   ensure
-    Net::SMTP.define_singleton_method(:new, &original_new.to_proc)
+    Net::SMTP.define_singleton_method(:new, &original_new.to_proc) if original_new
   end
 
   it 'uses Mailer To Go SMTP credentials when they are configured' do
