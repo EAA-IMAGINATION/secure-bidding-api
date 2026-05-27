@@ -50,6 +50,13 @@ module SecureBidding
             get_account(req, app, id)
           end
 
+          # POST /api/v1/accounts/:id/resend_verification
+          req.on 'resend_verification' do
+            req.post true do
+              resend_verification(req, app, id)
+            end
+          end
+
           req.patch true do
             update_account(req, app, id)
           end
@@ -242,6 +249,44 @@ module SecureBidding
                             auth.id
                           end
         auth_account_id == account_id
+      end
+
+      def self.resend_verification(_req, app, id)
+        can_resend = admin?(app) || account_owner?(app, id)
+        unless can_resend
+          app.response.status = 403
+          return { error: 'Forbidden: only admins or account owner can resend verification' }
+        end
+
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Account not found' }
+        end
+
+        account = SecureBidding::Services::Accounts::GetAccount.call(id)
+        if account.nil?
+          app.response.status = 404
+          return { error: 'Account not found' }
+        end
+
+        # Generate a fresh registration token and persist it
+        account.set_registration_token
+        account.save
+
+        verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
+        begin
+          SecureBidding::Services::Email::SendVerification.call(
+            account: account,
+            registration_token: account.registration_token,
+            verification_url: verification_url
+          )
+        rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
+          app.class::APP_LOGGER.error("Email service error: #{e.message}")
+          app.response.status = 502
+          return { error: 'Failed to send verification email' }
+        end
+
+        { id: account.id, status: 'verification_sent' }
       end
     end
   end

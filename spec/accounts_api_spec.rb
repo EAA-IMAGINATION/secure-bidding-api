@@ -421,5 +421,90 @@ describe 'API /api/v1/accounts' do
     promoted = SecureBidding::Account[target.id]
     _(promoted.system_role).must_equal 'admin'
   end
+  it 'HAPPY: account owner can POST /api/v1/accounts/:id/resend_verification' do
+    account = SecureBidding::Account.new(username: 'resend-owner', system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email('resend-owner@example.com')
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    # Stub email sending to avoid SMTP in tests
+    original = SecureBidding::Services::Email::SendVerification.method(:call)
+    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, registration_token:, verification_url:|
+      { ok: true, message: 'stubbed' }
+    end
+
+    begin
+      post "/api/v1/accounts/#{account.id}/resend_verification", '', headers
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['id']).must_equal account.id
+      _(response_body['status']).must_equal 'verification_sent'
+
+      refreshed = SecureBidding::Account[account.id]
+      _(refreshed.registration_token).wont_be_nil
+      _(refreshed.registration_token_expires_at).wont_be_nil
+    ensure
+      SecureBidding::Services::Email::SendVerification.define_singleton_method(:call, original)
+    end
+  end
+
+  it 'SAD: non-admin non-owner cannot POST resend_verification' do
+    owner = SecureBidding::Account.new(username: 'resend-owner2', system_role: 'member')
+    owner.set_password('my-secret-pass')
+    owner.set_email('resend-owner2@example.com')
+    owner.save
+
+    attacker = SecureBidding::Account.new(username: 'attacker', system_role: 'member')
+    attacker.set_password('my-secret-pass')
+    attacker.set_email('attacker@example.com')
+    attacker.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: attacker.id, username: attacker.username, system_role: attacker.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    post "/api/v1/accounts/#{owner.id}/resend_verification", '', headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_include 'Forbidden'
+  end
+
+  it 'SAD: returns 502 when email sending fails' do
+    account = SecureBidding::Account.new(username: 'resend-owner3', system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email('resend-owner3@example.com')
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    original = SecureBidding::Services::Email::SendVerification.method(:call)
+    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, registration_token:, verification_url:|
+      raise SecureBidding::Services::Email::SendVerification::MailerToGoError, 'SMTP failed'
+    end
+
+    begin
+      post "/api/v1/accounts/#{account.id}/resend_verification", '', headers
+
+      _(last_response.status).must_equal 502
+      response_body = JSON.parse(last_response.body)
+      _(response_body['error']).must_include 'Failed to send'
+    ensure
+      SecureBidding::Services::Email::SendVerification.define_singleton_method(:call, original)
+    end
+  end
 end
 # rubocop:enable Metrics/BlockLength
