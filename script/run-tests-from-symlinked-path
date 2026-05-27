@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+symlink_path="/tmp/secure-bidding-api"
+
+ln -sfn "$repo_root" "$symlink_path"
+cd "$symlink_path"
+
+if [ "$#" -eq 0 ]; then
+  exec bundle exec ruby -I. -e 'ENV["RACK_ENV"] = "test"; Dir["spec/**/*_spec.rb"].sort.each { |file| require File.expand_path(file) }'
+fi
+
+exec bundle exec ruby -I. -e 'ENV["RACK_ENV"] = "test"; ARGV.each { |file| require File.expand_path(file) }' "$@"
