@@ -178,7 +178,7 @@ module SecureBidding
           )
           if result[:ok]
             if result[:registration_token]
-              verification_url = SecureBidding::Routes::Auth.build_verification_url(app, req)
+              verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
               begin
                 SecureBidding::Services::Email::SendVerification.call(
                   account: result[:account],
