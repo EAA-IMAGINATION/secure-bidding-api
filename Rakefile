@@ -7,6 +7,10 @@ require 'yaml'
 require 'sequel/extensions/seed'
 require_relative 'app/db/database'
 
+Dir.glob(File.expand_path('lib/tasks/**/*.rake', __dir__)).sort.each do |task_file|
+  load task_file
+end
+
 begin
   require 'pry'
 rescue LoadError
