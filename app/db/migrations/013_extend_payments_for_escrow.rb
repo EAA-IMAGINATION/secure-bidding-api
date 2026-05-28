@@ -7,6 +7,7 @@ Sequel.migration do
     has_payment_type = payment_columns.include?(:payment_type)
     has_status = payment_columns.include?(:status)
     has_gateway_transaction_id = payment_columns.include?(:gateway_transaction_id)
+    milestones_table_exists = table_exists?(:milestones)
 
     existing_foreign_keys = foreign_key_list(:payments)
 
@@ -39,7 +40,7 @@ Sequel.migration do
 
     unless existing_foreign_keys.any? { |foreign_key| foreign_key[:columns] == [:milestone_id] }
       alter_table(:payments) do
-        add_foreign_key [:milestone_id], :milestones, on_delete: :set_null
+        add_foreign_key [:milestone_id], :milestones, on_delete: :set_null if milestones_table_exists
       end
     end
     unless existing_foreign_keys.any? { |foreign_key| foreign_key[:columns] == [:project_id] }
@@ -53,8 +54,8 @@ Sequel.migration do
       end
     end
 
-    add_index :payments, :milestone_id unless index_exists?(:payments, :milestone_id)
-    add_index :payments, :project_id unless index_exists?(:payments, :project_id)
+    add_index :payments, :milestone_id unless indexes(:payments).values.any? { |index| index[:columns] == [:milestone_id] }
+    add_index :payments, :project_id unless indexes(:payments).values.any? { |index| index[:columns] == [:project_id] }
   end
 
   down do
