@@ -5,11 +5,16 @@ module SecureBidding
     module Payments
       # Creates a placeholder payment linked to a bid submission.
       class CreatePayment
+        UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/.freeze
+
         def self.call(payload)
           bid_submission_id = payload['bid_submission_id']
           if bid_submission_id.to_s.strip.empty?
             return { ok: false, status: 400,
                      error: 'bid_submission_id is required' }
+          elsif !uuid?(bid_submission_id)
+            return { ok: false, status: 400,
+                     error: 'bid_submission_id must be a UUID' }
           end
 
           bid_submission = SecureBidding::BidSubmission[bid_submission_id]
@@ -30,6 +35,10 @@ module SecureBidding
           { ok: true, payment: payment }
         rescue Sequel::UniqueConstraintViolation
           { ok: false, status: 400, error: 'payment already exists for bid submission' }
+        end
+
+        def self.uuid?(value)
+          value.to_s.match?(UUID_FORMAT)
         end
       end
     end

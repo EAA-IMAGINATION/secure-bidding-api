@@ -5,6 +5,8 @@ module SecureBidding
     module Projects
       # Creates a bid submission for a project if bidder membership is present.
       class CreateBidForProject
+        UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/.freeze
+
         def self.call(project_id:, payload:, auth_account:)
           project = SecureBidding::Project[project_id]
           return { ok: false, status: 404, error: 'Project not found' } if project.nil?
@@ -18,6 +20,8 @@ module SecureBidding
           if [bidder_account_id, contractor_alias, plaintext_bid].any? { |value| value.to_s.strip.empty? }
             return { ok: false, status: 400,
                      error: 'bidder_account_id, contractor_alias, and plaintext_bid are required' }
+          elsif !uuid?(bidder_account_id)
+            return { ok: false, status: 400, error: 'bidder_account_id must be a UUID' }
           end
 
           bidder = SecureBidding::Account[bidder_account_id]
@@ -55,6 +59,10 @@ module SecureBidding
             project_id: project_id
           )
           !collaboration.nil? && collaboration.collaboration_role == 'owner'
+        end
+
+        def self.uuid?(value)
+          value.to_s.match?(UUID_FORMAT)
         end
       end
     end
