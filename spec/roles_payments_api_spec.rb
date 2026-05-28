@@ -235,5 +235,46 @@ describe 'API role and payment placeholders' do
     payment_payload = JSON.parse(last_response.body)
     _(payment_payload['paid']).must_equal true
   end
+
+  it 'SAD: rejects a non-UUID bid_submission_id when creating a payment' do
+    post '/api/v1/payments',
+         {
+           bid_submission_id: 'not-a-uuid',
+           paid: false,
+           method: 'placeholder',
+           reference: 'stub-002'
+         }.to_json,
+         { 'CONTENT_TYPE' => 'application/json' }
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'bid_submission_id must be a UUID'
+  end
+
+  it 'SAD: rejects a non-UUID account_id when assigning a project role' do
+    owner = create_account(username: 'uuid-owner', email: 'uuid-owner@example.com')
+
+    post "/api/v1/accounts/#{owner.id}/system_roles",
+         { role: 'project_owner' }.to_json,
+         auth_header_for(@admin)
+    _(last_response.status).must_equal 201
+
+    post '/api/v1/projects',
+         {
+           title: 'uuid-role-project',
+           budget_cents: 210_000
+         }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { account_id: 'not-a-uuid', role: 'bidder' }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'account_id must be a UUID'
+  end
 end
 # rubocop:enable Metrics/BlockLength

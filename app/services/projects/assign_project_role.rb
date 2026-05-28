@@ -6,10 +6,15 @@ module SecureBidding
       # Assigns an account to a project with a project-scoped role.
       class AssignProjectRole
         ALLOWED_ROLES = %w[project_owner bidder].freeze
+        UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/.freeze
 
         def self.call(project_id:, account_id:, role_name:, requested_by_admin:)
           project = SecureBidding::Project[project_id]
           return { ok: false, status: 404, error: 'Project not found' } if project.nil?
+
+          unless uuid?(account_id)
+            return { ok: false, status: 400, error: 'account_id must be a UUID' }
+          end
 
           account = SecureBidding::Account[account_id]
           return { ok: false, status: 404, error: 'Account not found' } if account.nil?
@@ -100,6 +105,10 @@ module SecureBidding
               status: 'pending'
             }
           }
+        end
+
+        def self.uuid?(value)
+          value.to_s.match?(UUID_FORMAT)
         end
       end
     end
