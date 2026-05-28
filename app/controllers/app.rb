@@ -73,7 +73,8 @@ module SecureBidding
         username: account.username,
         system_role: account.system_role,
         email: account.email,
-        phone: account.phone
+        phone: account.phone,
+        email_verified: !account.email_verified_at.nil?
       }
     end
 
