@@ -39,17 +39,17 @@ Sequel.migration do
 
     unless existing_foreign_keys.any? { |foreign_key| foreign_key[:columns] == [:milestone_id] }
       alter_table(:payments) do
-        add_foreign_key :milestone_id, :milestones, type: :uuid, on_delete: :set_null
+        add_foreign_key [:milestone_id], :milestones, type: :uuid, on_delete: :set_null
       end
     end
     unless existing_foreign_keys.any? { |foreign_key| foreign_key[:columns] == [:project_id] }
       alter_table(:payments) do
-        add_foreign_key :project_id, :projects, type: :uuid, on_delete: :cascade
+        add_foreign_key [:project_id], :projects, type: :uuid, on_delete: :cascade
       end
     end
     unless existing_foreign_keys.any? { |foreign_key| foreign_key[:columns] == [:recipient_id] }
       alter_table(:payments) do
-        add_foreign_key :recipient_id, :accounts, type: :uuid, on_delete: :set_null
+        add_foreign_key [:recipient_id], :accounts, type: :uuid, on_delete: :set_null
       end
     end
 
