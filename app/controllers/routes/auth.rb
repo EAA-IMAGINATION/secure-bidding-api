@@ -164,7 +164,8 @@ module SecureBidding
           username: auth_account.username,
           email: auth_account.email,
           system_role: auth_account.system_role,
-          system_roles: auth_account.system_roles.map(&:name)
+          system_roles: auth_account.system_roles.map(&:name),
+          email_verified: !auth_account.email_verified_at.nil?
         }
       end
 
