@@ -112,14 +112,22 @@ Sequel.migration do
       end
     end
 
-    # Ensure indexes exist (Sequel will ignore duplicates in many adapters)
-    alter_table(:accounts) do
-      add_index :system_role
-      add_index :phone_hash, unique: true
+    # Ensure indexes exist (tolerate duplicates where the adapter raises)
+    begin
+      alter_table(:accounts) do
+        add_index :system_role
+        add_index :phone_hash, unique: true
+      end
+    rescue StandardError
+      # ignore duplicate-index errors on some adapters
     end
 
-    alter_table(:projects) do
-      add_index :state
+    begin
+      alter_table(:projects) do
+        add_index :state
+      end
+    rescue StandardError
+      # ignore duplicate-index errors on some adapters
     end
   end
 
