@@ -74,7 +74,8 @@ module SecureBidding
         system_role: account.system_role,
         email: account.email,
         phone: account.phone,
-        email_verified: !account.email_verified_at.nil?
+        email_verified: !account.email_verified_at.nil?,
+        system_roles: account.system_roles_dataset.order(:name).select_map(:name)
       }
     end
 
