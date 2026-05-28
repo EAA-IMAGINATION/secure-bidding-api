@@ -3,12 +3,12 @@ Sequel.migration do
     # Try to alter payments table; ignore duplicate-column errors to support local variations
     begin
       alter_table(:payments) do
-        add_column :milestone_id, String
-        add_foreign_key :milestone_id, :milestones, type: String, on_delete: :set_null
-        add_column :project_id, String
-        add_foreign_key :project_id, :projects, type: String, on_delete: :cascade
-        add_column :recipient_id, String
-        add_foreign_key :recipient_id, :accounts, type: String, on_delete: :set_null
+        add_column :milestone_id, :uuid
+        add_foreign_key :milestone_id, :milestones, type: :uuid, on_delete: :set_null
+        add_column :project_id, :uuid
+        add_foreign_key :project_id, :projects, type: :uuid, on_delete: :cascade
+        add_column :recipient_id, :uuid
+        add_foreign_key :recipient_id, :accounts, type: :uuid, on_delete: :set_null
         add_column :payment_type, String
         add_column :status, String, default: 'pending'
         add_column :gateway_transaction_id, String
