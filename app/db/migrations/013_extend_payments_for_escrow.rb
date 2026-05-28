@@ -1,11 +1,12 @@
 Sequel.migration do
   up do
-    has_milestone_id = column_exists?(:payments, :milestone_id)
-    has_project_id = column_exists?(:payments, :project_id)
-    has_recipient_id = column_exists?(:payments, :recipient_id)
-    has_payment_type = column_exists?(:payments, :payment_type)
-    has_status = column_exists?(:payments, :status)
-    has_gateway_transaction_id = column_exists?(:payments, :gateway_transaction_id)
+    payment_columns = schema(:payments).map(&:first)
+    has_milestone_id = payment_columns.include?(:milestone_id)
+    has_project_id = payment_columns.include?(:project_id)
+    has_recipient_id = payment_columns.include?(:recipient_id)
+    has_payment_type = payment_columns.include?(:payment_type)
+    has_status = payment_columns.include?(:status)
+    has_gateway_transaction_id = payment_columns.include?(:gateway_transaction_id)
 
     existing_foreign_keys = foreign_key_list(:payments)
 
@@ -51,13 +52,15 @@ Sequel.migration do
   end
 
   down do
+    payment_columns = schema(:payments).map(&:first)
+
     alter_table(:payments) do
-      drop_column :gateway_transaction_id if column_exists?(:payments, :gateway_transaction_id)
-      drop_column :status if column_exists?(:payments, :status)
-      drop_column :payment_type if column_exists?(:payments, :payment_type)
-      drop_column :recipient_id if column_exists?(:payments, :recipient_id)
-      drop_column :project_id if column_exists?(:payments, :project_id)
-      drop_column :milestone_id if column_exists?(:payments, :milestone_id)
+      drop_column :gateway_transaction_id if payment_columns.include?(:gateway_transaction_id)
+      drop_column :status if payment_columns.include?(:status)
+      drop_column :payment_type if payment_columns.include?(:payment_type)
+      drop_column :recipient_id if payment_columns.include?(:recipient_id)
+      drop_column :project_id if payment_columns.include?(:project_id)
+      drop_column :milestone_id if payment_columns.include?(:milestone_id)
     end
   end
 end
