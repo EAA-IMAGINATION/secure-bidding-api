@@ -6,7 +6,7 @@ Sequel.migration do
       String :title, null: false
       Text :description
       Integer :budget_cents, null: false
-      String :assigned_bidder_id, type: :uuid
+      column :assigned_bidder_id, :uuid
       String :state, null: false, default: 'pending_funding'
       Integer :sequence_order, null: false, default: 1
       DateTime :created_at, default: Sequel::CURRENT_TIMESTAMP
