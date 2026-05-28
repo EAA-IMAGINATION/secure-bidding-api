@@ -1,8 +1,8 @@
 Sequel.migration do
   up do
     create_table(:integrity_snapshots) do
-      String :id, primary_key: true
-      foreign_key :project_id, :projects, type: String, null: false, unique: true, on_delete: :cascade
+      column :id, :uuid, primary_key: true
+      foreign_key :project_id, :projects, type: :uuid, null: false, unique: true, on_delete: :cascade
       String :canonical_hash, null: false
       DateTime :snapshot_taken_at, null: false
     end
