@@ -11,6 +11,7 @@ module SecureBidding
 
     many_to_one :project, key: :project_id, class: 'SecureBidding::Project'
     one_to_many :payments, key: :bid_submission_id, class: 'SecureBidding::Payment'
+    one_to_many :bid_documents, key: :bid_id, class: 'SecureBidding::BidDocument'
 
     def encrypt_bid(plaintext)
       self.secure_encrypted_bid = SecureDB.encrypt(plaintext)
