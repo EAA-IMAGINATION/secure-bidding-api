@@ -175,6 +175,32 @@ describe 'API /api/v1/projects' do
     _(response_body['bid_submissions'][0]['project_id']).must_equal project_id
   end
 
+  it 'SAD: rejects a non-UUID bidder_account_id when creating a project bid' do
+    owner = create_account(username: 'bid-owner', email: 'bid-owner@example.com')
+
+    post '/api/v1/projects',
+         {
+           title: 'uuid-bid-project',
+           budget_cents: 99_000,
+           state: 'published'
+         }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: 'not-a-uuid',
+           contractor_alias: 'bad-bidder',
+           plaintext_bid: 'should-fail'
+         }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'bidder_account_id must be a UUID'
+  end
+
   it 'SAD: returns 404 for unknown project id on /api/v1/projects/:id/bid_submissions' do
     get '/api/v1/projects/00000000-0000-0000-0000-000000000000/bid_submissions'
 
