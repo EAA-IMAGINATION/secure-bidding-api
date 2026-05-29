@@ -67,16 +67,84 @@ module SecureBidding
       APP_LOGGER.warn("[mass_assignment] resource=#{resource} keys=#{blocked_keys.join(',')}")
     end
 
-    def account_response(account)
-      {
+    def account_response(account, policy: nil)
+      payload = {
         id: account.id,
         username: account.username,
         system_role: account.system_role,
         email: account.email,
         phone: account.phone,
         email_verified: !account.email_verified_at.nil?,
-        system_roles: account.system_roles_dataset.order(:name).select_map(:name)
+        system_roles: account.system_roles_dataset.order(:name).select_map(:name),
+        capabilities: account.capabilities
       }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def project_response(project, policy: nil)
+      payload = {
+        id: project.id,
+        title: project.title,
+        budget_cents: project.budget_cents,
+        state: project.state
+      }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def bid_submission_response(bid_submission, policy: nil)
+      payload = {
+        id: bid_submission.id,
+        project_id: bid_submission.project_id,
+        contractor_alias: bid_submission.contractor_alias
+      }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def payment_response(payment, policy: nil)
+      payload = {
+        id: payment.id,
+        bid_submission_id: payment.bid_submission_id,
+        paid: payment.paid,
+        method: payment[:method],
+        reference: payment.reference,
+        paid_at: payment.paid_at
+      }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def bid_response(bid, policy: nil)
+      payload = {
+        id: bid.id,
+        contractor: bid.contractor,
+        project_id: bid.project_id,
+        encrypted_bid: bid.encrypted_bid
+      }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def account_policy(account)
+      SecureBidding::Policies::AccountPolicy.new(auth_account, account)
+    end
+
+    def project_policy(project)
+      SecureBidding::Policies::ProjectPolicy.new(auth_account, project)
+    end
+
+    def bid_submission_policy(bid_submission)
+      SecureBidding::Policies::BidSubmissionPolicy.new(auth_account, bid_submission)
+    end
+
+    def payment_policy(payment)
+      SecureBidding::Policies::PaymentPolicy.new(auth_account, payment)
+    end
+
+    def bid_policy(bid)
+      SecureBidding::Policies::BidPolicy.new(auth_account, bid)
     end
 
     def project_membership_response(membership)
@@ -85,17 +153,6 @@ module SecureBidding
         project_id: membership.project_id,
         account_id: membership.account_id,
         role: membership.role.name
-      }
-    end
-
-    def payment_response(payment)
-      {
-        id: payment.id,
-        bid_submission_id: payment.bid_submission_id,
-        paid: payment.paid,
-        method: payment[:method],
-        reference: payment.reference,
-        paid_at: payment.paid_at
       }
     end
 
@@ -131,9 +188,9 @@ module SecureBidding
       begin
         @auth_account = http_request.authenticated_account
       rescue InvalidTokenError
-        r.halt(403, { message: 'Invalid auth token' }.to_json)
+        r.halt(401, { message: 'Invalid auth token' }.to_json)
       rescue ExpiredTokenError
-        r.halt(403, { message: 'Expired auth token' }.to_json)
+        r.halt(401, { message: 'Expired auth token' }.to_json)
       end
 
       # Root route - health check
