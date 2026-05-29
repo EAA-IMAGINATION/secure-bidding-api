@@ -25,6 +25,12 @@ module SecureBidding
 
       def self.handle_authenticate(req, app)
         credentials = HttpRequest.new(req).body_data
+        form = SecureBidding::Forms::AuthenticateForm.new
+        result = form.call(credentials)
+        unless result.success?
+          req.halt 400, { error: result.errors.to_h }.to_json
+        end
+
         auth_account = AuthenticateAccount.call(credentials)
 
         session_payload = {
@@ -43,6 +49,11 @@ module SecureBidding
 
       def self.handle_availability(req, app)
         data = HttpRequest.new(req).body_data
+        result = SecureBidding::Forms::AvailabilityForm.new.call(data)
+        unless result.success?
+          req.halt 400, { error: result.errors.to_h }.to_json
+        end
+
         username = data[:username].to_s.strip
         email = data[:email].to_s.strip
 
@@ -62,6 +73,8 @@ module SecureBidding
 
       def self.handle_register(req, app)
         data = HttpRequest.new(req).body_data
+        SecureBidding::Forms::RegisterForm.new.call(data)
+
         username = data[:username].to_s.strip
         email = data[:email].to_s.strip
 
@@ -107,10 +120,13 @@ module SecureBidding
 
       def self.handle_verify(req, app)
         data = HttpRequest.new(req).body_data
+        result = SecureBidding::Forms::VerifyForm.new.call(data)
+        unless result.success?
+          req.halt 400, { error: result.errors.to_h }.to_json
+        end
+
         registration_token = data[:registration_token].to_s.strip
         password = data[:password].to_s.strip
-
-        return req.halt(400, { error: 'registration_token and password are required' }.to_json) if registration_token.empty? || password.empty?
 
         begin
           token_data = SecureBidding::AuthToken.load(registration_token)
@@ -165,7 +181,8 @@ module SecureBidding
           email: auth_account.email,
           system_role: auth_account.system_role,
           system_roles: auth_account.system_roles.map(&:name),
-          email_verified: !auth_account.email_verified_at.nil?
+          email_verified: !auth_account.email_verified_at.nil?,
+          capabilities: auth_account.capabilities
         }
       end
 
@@ -177,7 +194,7 @@ module SecureBidding
 
       def self.log_and_halt_invalid_credentials(app, req, err)
         app.class::APP_LOGGER.warn("Authentication failed: #{err.message}")
-        req.halt 403, { error: 'Invalid credentials' }.to_json
+        req.halt 401, { error: 'Invalid credentials' }.to_json
       end
 
       def self.log_and_halt_auth_error(app, req, err)

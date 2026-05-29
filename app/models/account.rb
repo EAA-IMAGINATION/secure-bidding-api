@@ -83,7 +83,19 @@ module SecureBidding
     end
 
     def system_role?(role_name)
-      system_roles_dataset.where(name: role_name).count.positive?
+      system_role == role_name || system_roles_dataset.where(name: role_name).count.positive?
+    end
+
+    def capabilities
+      {
+        admin: system_role?('admin'),
+        system_admin: system_role?('system_admin'),
+        project_owner: system_role?('project_owner'),
+        bidder: system_role?('bidder'),
+        can_manage_accounts: system_role?('admin'),
+        can_assign_system_roles: system_role?('admin'),
+        can_create_projects: system_role?('admin') || system_role?('project_owner')
+      }
     end
 
     def self.by_registration_token(token_string)

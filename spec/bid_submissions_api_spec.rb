@@ -177,7 +177,7 @@ describe 'API /api/v1/bid_submissions' do
 
     post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
 
-    _(last_response.status).must_equal 403
+    _(last_response.status).must_equal 401
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'Login required to bid on projects'
   end

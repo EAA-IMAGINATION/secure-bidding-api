@@ -73,8 +73,8 @@ module SecureBidding
           return { error: 'Forbidden: only admins can list all accounts' }
         end
 
-        accounts = Account.order(:id).all.map do |account|
-          { id: account.id, username: account.username, system_role: account.system_role }
+        accounts = SecureBidding::Policies::AccountPolicy::Scope.new(app.auth_account, Account).resolve.map do |account|
+          app.account_response(account, policy: app.account_policy(account))
         end
         { accounts: accounts }
       end
@@ -82,6 +82,8 @@ module SecureBidding
       def self.create_account(_req, app)
         data = app.parse_json_request_body
         return data if app.response.status == 400
+
+        SecureBidding::Forms::AccountsCreateForm.new.call(data)
 
         result = SecureBidding::Services::Accounts::CreateAccount.call(data)
         if result[:ok]
@@ -94,12 +96,14 @@ module SecureBidding
       end
 
       def self.search_accounts(req, app)
+        SecureBidding::Forms::AccountsSearchForm.new.call(req.params)
+
         result = SecureBidding::Services::Accounts::SearchAccounts.call(
           email: req.params['email'],
           phone: req.params['phone']
         )
         if result[:ok]
-          { accounts: result[:accounts].map { |account| app.account_response(account) } }
+          { accounts: result[:accounts].map { |account| app.account_response(account, policy: app.account_policy(account)) } }
         else
           app.response.status = result[:status]
           { error: result[:error] }
@@ -113,7 +117,7 @@ module SecureBidding
         end
 
         account = SecureBidding::Services::Accounts::GetAccount.call(id)
-        if account
+        if account && app.account_policy(account).show?
           { account_id: account.id, roles: account.system_roles_dataset.order(:name).select_map(:name) }
         else
           app.response.status = 404
@@ -130,9 +134,11 @@ module SecureBidding
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
+        SecureBidding::Forms::AccountsSystemRoleForm.new.call(data)
+
         result = SecureBidding::Services::Roles::AssignSystemRole.call(
           account_id: id,
-          role_name: data['role']
+          role_name: data['role'] || data[:role]
         )
         if result[:ok]
           app.response.status = 201
@@ -146,12 +152,12 @@ module SecureBidding
       def self.get_account(_req, app, id)
         unless app.valid_uuid?(id)
           app.response.status = 404
-          { error: 'Account not found' }
+          return { error: 'Account not found' }
         end
 
         account = SecureBidding::Services::Accounts::GetAccount.call(id)
-        if account
-          app.account_response(account)
+        if account && app.account_policy(account).show?
+          app.account_response(account, policy: app.account_policy(account))
         else
           app.response.status = 404
           { error: 'Account not found' }
@@ -159,12 +165,6 @@ module SecureBidding
       end
 
       def self.update_account(_req, app, id)
-        can_update = admin?(app) || account_owner?(app, id)
-        unless can_update
-          app.response.status = 403
-          return { error: 'Forbidden: only admins or account owner can update account' }
-        end
-
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Account not found' }
@@ -174,9 +174,11 @@ module SecureBidding
         if account.nil?
           app.response.status = 404
           { error: 'Account not found' }
-        else
+        elsif app.account_policy(account).update?
           data = app.parse_json_request_body
           return data if app.response.status == 400
+
+          SecureBidding::Forms::AccountsUpdateForm.new.call(data)
 
           result = SecureBidding::Services::Accounts::UpdateAccount.call(
             account,
@@ -203,15 +205,13 @@ module SecureBidding
             app.response.status = result[:status]
             { error: result[:error] }
           end
+        else
+          app.response.status = 403
+          { error: 'Forbidden: only admins or account owner can update account' }
         end
       end
 
       def self.delete_account(_req, app, id)
-        unless admin?(app)
-          app.response.status = 403
-          return { error: 'Forbidden: only admins can delete accounts' }
-        end
-
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Account not found' }
@@ -221,9 +221,12 @@ module SecureBidding
         if account.nil?
           app.response.status = 404
           { error: 'Account not found' }
-        else
+        elsif app.account_policy(account).destroy?
           account.delete
           { id: id, status: 'deleted' }
+        else
+          app.response.status = 403
+          { error: 'Forbidden: only admins can delete accounts' }
         end
       end
 
@@ -252,12 +255,6 @@ module SecureBidding
       end
 
       def self.resend_verification(_req, app, id)
-        can_resend = admin?(app) || account_owner?(app, id)
-        unless can_resend
-          app.response.status = 403
-          return { error: 'Forbidden: only admins or account owner can resend verification' }
-        end
-
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Account not found' }
@@ -267,26 +264,29 @@ module SecureBidding
         if account.nil?
           app.response.status = 404
           return { error: 'Account not found' }
+        elsif app.account_policy(account).resend_verification?
+          # Generate a fresh registration token and persist it
+          account.set_registration_token
+          account.save
+
+          verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
+          begin
+            SecureBidding::Services::Email::SendVerification.call(
+              account: account,
+              registration_token: account.registration_token,
+              verification_url: verification_url
+            )
+          rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
+            app.class::APP_LOGGER.error("Email service error: #{e.message}")
+            app.response.status = 502
+            return { error: 'Failed to send verification email' }
+          end
+
+          { id: account.id, status: 'verification_sent' }
+        else
+          app.response.status = 403
+          { error: 'Forbidden: only admins or account owner can resend verification' }
         end
-
-        # Generate a fresh registration token and persist it
-        account.set_registration_token
-        account.save
-
-        verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
-        begin
-          SecureBidding::Services::Email::SendVerification.call(
-            account: account,
-            registration_token: account.registration_token,
-            verification_url: verification_url
-          )
-        rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
-          app.class::APP_LOGGER.error("Email service error: #{e.message}")
-          app.response.status = 502
-          return { error: 'Failed to send verification email' }
-        end
-
-        { id: account.id, status: 'verification_sent' }
       end
     end
   end
