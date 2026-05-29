@@ -30,7 +30,7 @@ module SecureBidding
           project.set(project_attributes)
           project.save
 
-          role = SecureBidding::Role.first(name: 'project_owner')
+          role = SecureBidding::Role.ensure_role('project_owner')
           SecureBidding::ProjectMembership.first(account_id: owner.id, project_id: project.id, role_id: role.id) ||
             SecureBidding::ProjectMembership.create(account_id: owner.id, project_id: project.id, role_id: role.id)
 

@@ -64,44 +64,44 @@ describe 'API /api/v1/auth/authenticate' do
   end
 
   describe 'SAD: POST /api/v1/auth/authenticate with invalid credentials' do
-    it 'returns 403 for incorrect password' do
+    it 'returns 401 for incorrect password' do
       post '/api/v1/auth/authenticate',
            JSON.generate({ username: 'test_user', password: 'wrong_password' }),
            'CONTENT_TYPE' => 'application/json'
 
-      _(last_response.status).must_equal 403
+      _(last_response.status).must_equal 401
 
       response_body = JSON.parse(last_response.body)
       _(response_body).must_include 'error'
       _(response_body['error']).must_equal 'Invalid credentials'
     end
 
-    it 'returns 403 for non-existent user' do
+    it 'returns 401 for non-existent user' do
       post '/api/v1/auth/authenticate',
            JSON.generate({ username: 'nonexistent_user', password: 'any_password' }),
            'CONTENT_TYPE' => 'application/json'
 
-      _(last_response.status).must_equal 403
+      _(last_response.status).must_equal 401
 
       response_body = JSON.parse(last_response.body)
       _(response_body).must_include 'error'
       _(response_body['error']).must_equal 'Invalid credentials'
     end
 
-    it 'returns 403 for empty password' do
+    it 'returns 400 for empty password' do
       post '/api/v1/auth/authenticate',
            JSON.generate({ username: 'test_user', password: '' }),
            'CONTENT_TYPE' => 'application/json'
 
-      _(last_response.status).must_equal 403
+      _(last_response.status).must_equal 400
     end
 
-    it 'returns 403 for missing credentials' do
+    it 'returns 400 for missing credentials' do
       post '/api/v1/auth/authenticate',
            JSON.generate({}),
            'CONTENT_TYPE' => 'application/json'
 
-      _(last_response.status).must_equal 403
+      _(last_response.status).must_equal 400
     end
   end
 

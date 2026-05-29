@@ -63,33 +63,26 @@ module SecureBidding
       end
 
       def self.list_projects(_req, app)
-        if app.auth_account
-          # Authenticated user: return owned projects and published projects they can see
-          projects = Project.where(state: 'published').order(:id).all.map do |project|
-            { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
-          end
-        else
-          # Unauthenticated: return only published projects
-          projects = Project.where(state: 'published').order(:id).all.map do |project|
-            { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
-          end
+        projects = SecureBidding::Policies::ProjectPolicy::Scope.new(app.auth_account, Project).resolve.map do |project|
+          app.project_response(project)
         end
         { projects: projects }
       end
 
       def self.create_project(_req, app)
         unless app.auth_account
-          app.response.status = 403
+          app.response.status = 401
           return { error: 'Authentication required to create projects' }
         end
 
-        payload = {}
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
+        SecureBidding::Forms::ProjectsCreateForm.new.call(data)
+
         create_project_from_auth_token(app, data)
       rescue Sequel::MassAssignmentRestriction
-        app.log_mass_assignment_attempt('project', payload, Project.allowed_columns)
+        app.log_mass_assignment_attempt('project', data, Project.allowed_columns)
         app.response.status = 400
         { error: 'Invalid project attributes' }
       rescue Sequel::UniqueConstraintViolation
@@ -122,7 +115,7 @@ module SecureBidding
           
           # Set owner as the authenticated account
           owner_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
-          role = SecureBidding::Role.first(name: 'project_owner')
+          role = SecureBidding::Role.ensure_role('project_owner')
           SecureBidding::ProjectMembership.create(
             account_id: owner_account_id,
             project_id: project.id,
@@ -150,12 +143,15 @@ module SecureBidding
         if project.nil?
           app.response.status = 404
           { error: 'Project not found' }
-        else
+        elsif app.project_policy(project).view_memberships?
           memberships = project.project_memberships_dataset.eager(:role).order(:id).all
           {
             project_id: project.id,
             memberships: memberships.map { |membership| app.project_membership_response(membership) }
           }
+        else
+          app.response.status = 403
+          { error: 'Forbidden: only project owner or admin can view memberships' }
         end
       end
 
@@ -165,18 +161,26 @@ module SecureBidding
           return { error: 'Project not found' }
         end
 
-        unless admin?(app) || owns_project?(app, id)
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        unless app.project_policy(project).manage_memberships?
           app.response.status = 403
           return { error: 'Forbidden: only project owner or admin can manage project memberships' }
         end
 
-        data = app.parse_json_request_body
-        return data if app.response.status == 400
+        SecureBidding::Forms::ProjectsRoleForm.new.call(data)
 
         result = SecureBidding::Services::Projects::AssignProjectRole.call(
           project_id: id,
-          account_id: data['account_id'],
-          role_name: data['role'],
+          account_id: data['account_id'] || data[:account_id],
+          role_name: data['role'] || data[:role],
           requested_by_admin: admin?(app)
         )
         if result[:ok]
@@ -200,7 +204,7 @@ module SecureBidding
         end
 
         unless app.auth_account
-          app.response.status = 403
+          app.response.status = 401
           return { error: 'Authentication required to accept ownership request' }
         end
 
@@ -210,17 +214,14 @@ module SecureBidding
           return { error: 'Project not found' }
         end
 
-        account_id = app.auth_account[:account_id] || app.auth_account['account_id']
-        collaboration = SecureBidding::AccountProject.first(
-          account_id: account_id,
-          project_id: id
-        )
-        if collaboration.nil? || collaboration.collaboration_role != 'pending_owner'
+        unless app.project_policy(project).accept_ownership?
           app.response.status = 404
           return { error: 'No pending ownership request found' }
         end
 
-        owner_role = SecureBidding::Role.first(name: 'project_owner')
+        account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+        collaboration = SecureBidding::AccountProject.first(account_id: account_id, project_id: id)
+        owner_role = SecureBidding::Role.ensure_role('project_owner')
         membership = SecureBidding::ProjectMembership.first(
           account_id: account_id,
           project_id: id,
@@ -244,9 +245,41 @@ module SecureBidding
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        if app.auth_account.nil?
+          app.response.status = 401
+          return { error: 'Authentication required to bid on projects' }
+        end
+
+        bidder_account_id = data['bidder_account_id'] || data[:bidder_account_id]
+        if bidder_account_id.to_s.strip.empty?
+          app.response.status = 400
+          return { error: 'bidder_account_id, contractor_alias, and plaintext_bid are required' }
+        elsif !bidder_account_id.to_s.match?(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
+          app.response.status = 400
+          return { error: 'bidder_account_id must be a UUID' }
+        end
+
+        if project.state != 'published'
+          app.response.status = 403
+          return { error: 'Project is not open for bidding' }
+        end
+
+        if SecureBidding::Services::Projects::CreateBidForProject.owner_of_project?(project.id, app.auth_account[:account_id] || app.auth_account['account_id'])
+          app.response.status = 403
+          return { error: 'Project owner cannot bid on own project' }
+        end
+
+        SecureBidding::Forms::ProjectsBidForm.new.call(data)
+
         result = SecureBidding::Services::Projects::CreateBidForProject.call(
           project_id: id,
-          payload: data,
+          payload: data.transform_keys(&:to_s),
           auth_account: app.auth_account
         )
         if result[:ok]
@@ -265,8 +298,8 @@ module SecureBidding
         end
 
         project = Project[id]
-        if project && project.state == 'published'
-          { id: project.id, title: project.title, budget_cents: project.budget_cents, state: project.state }
+        if project && app.project_policy(project).show?
+          app.project_response(project, policy: app.project_policy(project))
         else
           app.response.status = 404
           { error: 'Project not found' }
@@ -280,13 +313,9 @@ module SecureBidding
         end
 
         project = Project[id]
-        if project
+        if project && app.project_policy(project).view_bid_submissions?
           bid_submissions = project.bid_submissions_dataset.order(:id).all.map do |bid_submission|
-            {
-              id: bid_submission.id,
-              project_id: bid_submission.project_id,
-              contractor_alias: bid_submission.contractor_alias
-            }
+            app.bid_submission_response(bid_submission, policy: app.bid_submission_policy(bid_submission))
           end
           { project_id: project.id, bid_submissions: bid_submissions }
         else
@@ -296,33 +325,38 @@ module SecureBidding
       end
 
       def self.update_project(_req, app, id)
-        unless admin?(app) || owns_project?(app, id)
-          app.response.status = 403
-          return { error: 'Forbidden: only project owner or admin can update this project' }
-        end
-
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Project not found' }
         end
 
         project = Project[id]
-        return { error: 'Project not found' } if project.nil?
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        unless app.project_policy(project).update?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owner or admin can update this project' }
+        end
+
+        update_data = app.parse_json_request_body
+        return update_data if app.response.status == 400
+
+        SecureBidding::Forms::ProjectsUpdateForm.new.call(update_data)
+
+        if update_data.key?('state') && !Project::VALID_STATES.include?(update_data['state'])
+          app.response.status = 400
+          return { error: "state must be 'saved' or 'published'" }
+        end
+
+        if update_data.key?('budget_cents') && !update_data['budget_cents'].to_s.match?(/\A\d+\z/)
+          app.response.status = 400
+          return { error: 'budget_cents must be a non-negative integer' }
+        end
 
         begin
-          update_data = app.parse_json_request_body
-          return update_data if app.response.status == 400
-
-          if update_data.key?('state') && !Project::VALID_STATES.include?(update_data['state'])
-            app.response.status = 400
-            return { error: "state must be 'saved' or 'published'" }
-          end
-
-          if update_data.key?('budget_cents') && !update_data['budget_cents'].to_s.match?(/\A\d+\z/)
-            app.response.status = 400
-            return { error: 'budget_cents must be a non-negative integer' }
-          end
-
           project.update(update_data.transform_keys(&:to_sym))
           { id: project.id, status: 'updated' }
         rescue StandardError => e
@@ -333,11 +367,6 @@ module SecureBidding
       end
 
       def self.delete_project(_req, app, id)
-        unless admin?(app) || owns_project?(app, id)
-          app.response.status = 403
-          return { error: 'Forbidden: only project owner or admin can delete this project' }
-        end
-
         unless app.valid_uuid?(id)
           app.response.status = 404
           return { error: 'Project not found' }
@@ -347,9 +376,12 @@ module SecureBidding
         if project.nil?
           app.response.status = 404
           { error: 'Project not found' }
-        else
+        elsif app.project_policy(project).destroy?
           project.delete
           { id: id, status: 'deleted' }
+        else
+          app.response.status = 403
+          { error: 'Forbidden: only project owner or admin can delete this project' }
         end
       end
 

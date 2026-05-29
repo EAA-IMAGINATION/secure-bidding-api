@@ -29,7 +29,7 @@ module SecureBidding
             return assign_owner(project: project, account: account, requested_by_admin: requested_by_admin)
           end
 
-          role = SecureBidding::Role.first(name: normalized_role)
+          role = SecureBidding::Role.ensure_role(normalized_role)
           membership = SecureBidding::ProjectMembership.first(
             account_id: account.id,
             project_id: project.id,
@@ -45,7 +45,7 @@ module SecureBidding
 
         def self.assign_owner(project:, account:, requested_by_admin:)
           if requested_by_admin
-            role = SecureBidding::Role.first(name: 'project_owner')
+            role = SecureBidding::Role.ensure_role('project_owner')
             membership = SecureBidding::ProjectMembership.first(
               account_id: account.id,
               project_id: project.id,
@@ -73,7 +73,7 @@ module SecureBidding
           collaboration = SecureBidding::AccountProject.first(account_id: account.id, project_id: project.id)
           if collaboration
             if collaboration.collaboration_role == 'owner'
-              role = SecureBidding::Role.first(name: 'project_owner')
+              role = SecureBidding::Role.ensure_role('project_owner')
               membership = SecureBidding::ProjectMembership.first(
                 account_id: account.id,
                 project_id: project.id,

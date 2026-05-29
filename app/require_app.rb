@@ -38,6 +38,21 @@ require_relative 'lib/search_hash'
 require_relative 'lib/key_stretching'
 require_relative 'lib/auth_token'
 
+require_relative 'forms/base_form'
+require_relative 'policies/base_policy'
+
+Dir[File.expand_path('forms/**/*.rb', __dir__)].sort.each do |file|
+  next if file.end_with?('/base_form.rb')
+
+  require file
+end
+
+Dir[File.expand_path('policies/**/*.rb', __dir__)].sort.each do |file|
+  next if file.end_with?('/base_policy.rb')
+
+  require file
+end
+
 auth_token_key = ENV['AUTH_TOKEN_KEY'].to_s
 if auth_token_key.empty?
   if SecureBidding::Environment.app_env == 'production'
