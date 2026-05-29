@@ -9,32 +9,32 @@ module SecureBidding
       # Parameters:
       # - req: the Roda request routing object
       # - _app: the application class (unused)
-      def self.call(req, _app)
+      def self.call(req, app)
         req.on 'bids' do
-          handle_create(req)
-          handle_list_and_show(req)
+          handle_create(req, app)
+          handle_list_and_show(req, app)
         end
       end
 
-      def self.handle_create(req)
+      def self.handle_create(req, app)
         req.post true do
-          create_bid(req)
+          create_bid(req, app)
         end
       end
 
-      def self.create_bid(req)
+      def self.create_bid(req, app)
         data = HttpRequest.new(req).body_data
-        encrypted_bid = data[:encrypted_bid] || data['encrypted_bid']
-
-        if encrypted_bid.nil? || encrypted_bid.to_s.strip.empty?
-          missing_encrypted_bid_response(req)
-        else
-          bid = build_bid_from_data(data, encrypted_bid)
-          bid.save
-
-          req.response.status = 201
-          { bid_id: bid.id, status: 'created' }
+        result = SecureBidding::Forms::BidsCreateForm.new.call(data)
+        unless result.success?
+          req.response.status = 400
+          return { error: result.errors.to_h }
         end
+
+        bid = build_bid_from_data(result.to_h)
+        bid.save
+
+        req.response.status = 201
+        { bid_id: bid.id, status: 'created' }
       end
 
       def self.missing_encrypted_bid_response(req)
@@ -42,48 +42,36 @@ module SecureBidding
         { error: 'encrypted_bid is required and cannot be empty' }
       end
 
-      def self.build_bid_from_data(data, encrypted_bid)
+      def self.build_bid_from_data(data)
         Bid.new(
-          contractor: data[:contractor] || data['contractor'],
-          project_id: data[:project_id] || data['project_id'],
-          encrypted_bid: encrypted_bid
+          contractor: data[:contractor],
+          project_id: data[:project_id],
+          encrypted_bid: data[:encrypted_bid]
         )
       end
 
-      def self.handle_list_and_show(req)
+      def self.handle_list_and_show(req, app)
         req.get do
-          handle_list(req)
-          handle_show(req)
+          req.is do
+            bid_ids = SecureBidding::Policies::BidPolicy::Scope.new(app.auth_account, Bid).resolve
+            { bid_ids: bid_ids }
+          end
+
+          req.on String do |id|
+            req.get { show_for_id(req, app, id) }
+          end
         end
       end
 
-      def self.handle_list(req)
-        req.is do
-          bid_ids = Bid.all
-          { bid_ids: bid_ids }
-        end
-      end
-
-      def self.handle_show(req)
-        req.on String do |id|
-          req.get { show_for_id(req, id) }
-        end
-      end
-
-      def self.show_for_id(req, id)
+      def self.show_for_id(req, app, id)
         bid = Bid.find(id)
         return not_found_response(req) unless bid
 
-        found_response(bid)
+        found_response(app, bid)
       end
 
-      def self.found_response(bid)
-        {
-          id: bid.id,
-          contractor: bid.contractor,
-          project_id: bid.project_id,
-          encrypted_bid: bid.encrypted_bid
-        }
+      def self.found_response(app, bid)
+        app.bid_response(bid, policy: app.bid_policy(bid))
       end
 
       def self.not_found_response(req)
