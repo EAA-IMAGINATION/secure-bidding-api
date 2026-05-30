@@ -6,23 +6,17 @@
 
 ## Rules
 
-1. Commit only after running the project tests for the implemented change.
+1. Commit only after tests pass for the implemented change.
 2. Keep commit messages short and meaningful.
-3. Never include any AI co-author trailer in commit messages.
-4. Hard stop: if a draft commit message contains an AI co-author trailer referencing Copilot, remove it before presenting or running the commit.
-5. The assistant should prepare the commit message and staged file set, then ask
-   the developer to run the commit command manually.
+3. **Never** include AI co-author trailers (`Co-authored-by: Copilot`, etc.).
+4. Prepare the staged file set and message; the developer runs `git commit`.
+5. Ask whether to push after the commit succeeds.
 
-## Notes
+## Hook setup
 
-- Ask whether to push to remote after the commit is created.
+```bash
+git config core.hooksPath .githooks
+```
 
-## Recommended setup
-
-To ensure no AI co-author trailers slip into commit history, set up the
-repository hooks locally:
-
-  git config core.hooksPath .githooks
-
-The repository includes .githooks/prepare-commit-msg which will automatically
-strip AI co-author trailers referencing Copilot from commit messages.
+`.githooks/prepare-commit-msg` strips AI co-author trailers automatically.
+CI rejects commits that include them.

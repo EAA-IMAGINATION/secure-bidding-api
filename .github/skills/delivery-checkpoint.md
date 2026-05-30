@@ -4,11 +4,11 @@
 
 - At the end of any implementation task before handoff
 
-## Rules
+## Checklist
 
-1. Run relevant tests first.
-2. Prepare a commit immediately after tests pass, but have the developer run the
-   final `git commit` command.
-3. Use a short, meaningful commit message.
-4. Ask whether to push to remote after committing.
-5. Never include any AI co-author trailer in commit messages.
+1. Run the relevant test suite (`bundle exec rake spec` or targeted spec file).
+2. If any `.md` files changed, run [markdown-linting](markdown-linting.md).
+3. Stage files and draft a short commit message.
+4. Hand off to the developer to run `git commit` — follow
+   [commit-authorship](commit-authorship.md) for authorship rules.
+5. Ask whether to push after the commit succeeds.
