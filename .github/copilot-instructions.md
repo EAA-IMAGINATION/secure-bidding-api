@@ -1,260 +1,75 @@
 # Copilot Instructions: Secure Bidding API
 
-## Weekly Scope Gate (Hard Rule)
+## Hard Rules (read first)
 
-1. Never work ahead of the professor's weekly requirements.
-2. Keep future-facing skills available as references, but only apply them when
-   that week's spec explicitly requires them.
-3. At the start of each task, map requirements to the smallest relevant skill
-   subset.
-4. If a requested implementation is outside current week scope, defer it and
-   document it as future roadmap work only.
+1. **Weekly scope** — Implement only what the current week requires. Defer everything
+   else as roadmap notes. See `.github/skills/weekly-scope-gating.md`.
+2. **Commit authorship** — Never add AI co-author trailers. Run tests before commit.
+   Developer runs the final commit. See `.github/skills/commit-authorship.md`.
+3. **Feature branches** — Never edit on `main`/`master`. See
+   `.github/skills/feature-branch-workflow.md`.
+4. **Test-first** — Write a failing test before implementation code. See
+   `.github/skills/tdd-mastery.md`.
 
-## Project Skills and Rules
+## Skill Index
 
-**Highest-priority commit rule:** Before creating or amending any commit,
-check the Commit Authorship Skill first. The repo rejects AI co-author
-trailers, and the local hook is expected to strip them before commit.
+Use the smallest skill set that covers the task. Read the linked file when the
+trigger applies.
 
-### 1. Feature Branch Workflow
+| Priority | Trigger | Skill |
+| --- | --- | --- |
+| Required | Every task start | [weekly-scope-gating](.github/skills/weekly-scope-gating.md) |
+| Required | Before commits | [commit-authorship](.github/skills/commit-authorship.md) |
+| Required | New feature start | [feature-branch-workflow](.github/skills/feature-branch-workflow.md) |
+| Required | Behavior changes | [tdd-mastery](.github/skills/tdd-mastery.md) |
+| High | Routes or models | [mvc-architecture](.github/skills/mvc-architecture.md) |
+| High | New/changed routes | [api-route-testing](.github/skills/api-route-testing.md) |
+| High | Sensitive data | [security-first](.github/skills/security-first.md) |
+| Medium | Schema/migrations | [sequel-db-setup](.github/skills/sequel-db-setup.md) |
+| Medium | Task handoff | [delivery-checkpoint](.github/skills/delivery-checkpoint.md) |
+| Medium | `.md` edits | [markdown-linting](.github/skills/markdown-linting.md) |
+| Low | Manual CRUD checks | [console-data-inspection](.github/skills/console-data-inspection.md) |
+| Low | Assignment completeness | [demo-alignment](.github/skills/demo-alignment.md) |
+| Low | Path with spaces | [symlinked-test-runner](.github/skills/symlinked-test-runner.md) |
 
-**Rule:** Never work directly from `main`/`master`.
-Before any edits, check the current branch; if it is `main`/`master`,
-switch to a feature branch first.
+### Future capability (reference only)
 
-**When to look at this skill:** At the start of every new feature.
+Use only when the weekly spec explicitly requires them:
 
-**Skill file:** `.github/skills/feature-branch-workflow.md`
+- [crypto-bid-envelope](.github/skills/crypto-bid-envelope.md)
+- [payment-gate-verification](.github/skills/payment-gate-verification.md)
+- [atomic-reveal-timer](.github/skills/atomic-reveal-timer.md)
+- [integrity-hash-publish](.github/skills/integrity-hash-publish.md)
 
-### 2. TDD Mastery Skill
-
-**Rule:** Always use Red-Green-Refactor and start with failing tests.
-
-**When to look at this skill:** Before writing application logic for routes,
-models, or migrations.
-
-**Skill file:** `.github/skills/tdd-mastery.md`
-
-### 3. MVC Architecture Skill
-
-**Rule:** Maintain strict separation of concerns.
-
-**When to look at this skill:** When modifying route handlers and model logic together.
-
-**Skill file:** `.github/skills/mvc-architecture.md`
-
-### 4. Security-First Skill
-
-**Rule:** Every new route must consider the 10 identified security issues.
-
-**When to look at this skill:** Before persisting or returning sensitive data.
-
-**Skill file:** `.github/skills/security-first.md`
-
-### 5. Sequel DB Setup Skill
-
-**Rule:** Keep migrations and environment DB config aligned with Sequel conventions.
-
-**When to look at this skill:** Before changing schema, migrations, or DB configuration.
-
-**Skill file:** `.github/skills/sequel-db-setup.md`
-
-### 6. Console Data Inspection Skill
-
-**Rule:** Use preloaded pry console for DB exploration and sanity checks.
-
-**When to look at this skill:** When manually validating create/read/update/delete
-behavior.
-
-**Skill file:** `.github/skills/console-data-inspection.md`
-
-### 7. API Route Testing Skill
-
-**Rule:** Test routes first with happy/sad paths and environment expectations.
-
-**When to look at this skill:** Before adding new GET/POST routes.
-
-**Skill file:** `.github/skills/api-route-testing.md`
-
-### 8. Markdown Linting Skill
-
-**Rule:** After editing any `.md` file, always run markdown linting before finishing.
-
-**When to look at this skill:** Every time a Markdown file is added or modified.
-
-**Skill file:** `.github/skills/markdown-linting.md`
-
-### 9. Commit Authorship Skill
-
-**Rule:** Commit only after tests pass, keep message short/meaningful, never add
-an AI co-author trailer, and ask whether to push.
-
-**When to look at this skill:** Before creating or amending commits.
-
-**Skill file:** `.github/skills/commit-authorship.md`
-
-### 10. Delivery Checkpoint Skill
-
-**Rule:** Run tests, prepare commit immediately after success, have developer
-execute final commit command, and ask about pushing to remote.
-
-**When to look at this skill:** At the end of each implementation task.
-
-**Skill file:** `.github/skills/delivery-checkpoint.md`
-
-### 11. Demo Alignment Skill
-
-**Rule:** Validate requirement coverage against demo branches and keep README aligned.
-
-**When to look at this skill:** When confirming assignment completeness.
-
-**Skill file:** `.github/skills/demo-alignment.md`
-
-### 12. Weekly Scope Gating Skill
-
-**Rule:** Select skills only from the current week's requirements and defer all
-out-of-scope implementation.
-
-**When to look at this skill:** At the beginning of every weekly assignment task.
-
-**Skill file:** `.github/skills/weekly-scope-gating.md`
-
-### 13. Future Capability Skills (Reference Only)
-
-These are intentionally saved for later project phases and should only be used
-when weekly specs require them:
-
-- `.github/skills/crypto-bid-envelope.md`
-- `.github/skills/payment-gate-verification.md`
-- `.github/skills/atomic-reveal-timer.md`
-- `.github/skills/integrity-hash-publish.md`
-
-### 14. Repetitive Tasks Automation
-
-**Action:** When asked to "Check Progress," run:
+## Commands
 
 ```bash
-bundle exec rake spec && bundle-audit check
+bundle exec rake spec                              # Full test suite
+bundle exec ruby spec/api_spec.rb                  # API route tests
+bundle exec ruby spec/bid_spec.rb                  # Model tests
+bundle exec rake spec && bundle-audit check        # "Check Progress"
+npx markdownlint-cli2 "**/*.md" "#node_modules"    # After .md edits
 ```
 
-This ensures the project remains stable and secure.
+If the repo path contains spaces, use `script/run-tests-from-symlinked-path`
+instead of `bundle exec rake spec` directly.
 
-**Recurring Markdown task:** After any `.md` edit, run:
+## Architecture (reference)
 
-```bash
-npx markdownlint-cli2 "**/*.md" "#node_modules" 2>&1
-```
+Ruby/Roda API with file-based legacy storage and Sequel/SQLite persistence.
 
-## Testing
+| Layer | Location | Role |
+| --- | --- | --- |
+| Models | `app/models/` | Domain + persistence (`SecureBidding::` namespace) |
+| Controllers | `app/controllers/` | Roda routes and HTTP responses |
+| DB | `app/db/` | SQLite files, migrations, seeds |
+| Legacy store | `app/db/store/` | JSON bid files |
 
-Run all tests:
+**Conventions:** keyword-arg model initializers; plural tables / singular FKs;
+`require_relative` for internal requires; Minitest spec DSL with `_()` assertions;
+happy + sad route tests; JSON errors as `{ error: "message" }`.
 
-```bash
-bundle exec rake spec
-```
+**Stack:** roda, json, rbnacl, sequel, sqlite3; test with rack-test + minitest.
 
-Run API tests only:
-
-```bash
-bundle exec ruby spec/api_spec.rb
-```
-
-Run model tests only:
-
-```bash
-bundle exec ruby spec/bid_spec.rb
-```
-
-Tests use Minitest with the spec DSL. Test files are located in `spec/` and
-follow the naming convention `*_spec.rb`.
-
-## Architecture
-
-This is a secure bidding API built with Ruby and Roda. The system now uses both
-file-based and Sequel/SQLite persistence.
-
-### Data Storage
-
-- **Legacy file persistence**: Bid JSON files stored in `app/db/store/`
-- **Sequel + SQLite persistence**: `app/db/development.db` and `app/db/test.db`
-- **Migrations**: Schema changes are in `app/db/migrations/`
-- **Environment config**: `config/environments.rb` controls environment-aware DB
-  URL
-
-### Module Structure
-
-- All classes are namespaced under `SecureBidding` module
-- **Models** (`app/models/`): Domain objects (e.g., `Bid`, `Account`, `Secret`)
-- **Controllers** (`app/controllers/`): HTTP request handlers (Roda-based API)
-- **DB** (`app/db/`): SQLite files + Sequel migrations
-- **DB/Store** (`app/db/store/`): Legacy file-based bid storage
-
-### Security Features
-
-- RbNaCl (libsodium) is included for cryptographic operations
-- UUIDs generated via `SecureRandom.uuid` for bid identifiers
-- 10 security issues documented in GitHub Issues
-
-## Key Conventions
-
-### Model Patterns
-
-- Models use keyword arguments in initializers (e.g.,
-  `Bid.new(contractor: 'ABC', project_id: '123', encrypted_bid: 'data')`)
-- Bid model (legacy storage) implements:
-  - `#save` to persist to `app/db/store/{id}.json`
-  - `#to_json` for serialization
-  - `#new_id` for UUID generation
-  - `::find(id)` class method to retrieve by ID
-  - `::all` class method to list all IDs
-- Sequel models use table-backed associations (`Account` has many `Secret`,
-  `Secret` belongs to `Account`)
-- Follow naming convention: plural tables and singular foreign keys (e.g., `account_id`)
-
-### Code Organization
-
-- Require statements use `require_relative` for internal files
-- JSON serialization uses `JSON.generate` (not `to_json` string)
-- File paths use string interpolation: `"app/db/store/#{id}.json"`
-
-### Testing Patterns
-
-- Use Minitest spec syntax: `describe` blocks with `it` statements
-- Assertions use `_()` wrapper: `_(value).must_equal expected`
-- Always clean up test data in `before` blocks (DB tables and file store as applicable)
-- Write HAPPY and SAD path tests for all routes
-- Include route tests for list, single-fetch, and create operations for each resource
-- Include a happy-path test that app works without `DATABASE_URL` in environment
-
-### API Response Patterns
-
-- Success responses return JSON with 200/201 status
-- Error responses return JSON with 400/404 status and `{ error: "message" }`
-- All routes use Roda's JSON plugin for automatic response serialization
-
-## Dependencies
-
-Core gems:
-
-- `roda` - Web framework
-- `json` - JSON serialization
-- `rbnacl` - NaCl cryptography library
-- `sequel` - ORM and migrations
-- `sqlite3` - SQLite adapter
-
-Development gems:
-
-- `bundler-audit` - Security vulnerability scanning
-- `pry` - Interactive console
-- `hirb` - Tabular console output
-
-Test gems (`:test` group):
-
-- `rack-test` - HTTP testing helpers
-- `minitest` - Test framework
-
-## Current Focus
-
-- Maintain assignment-aligned ORM implementation (`Account` + `Secret`)
-- Keep route tests complete for HAPPY/SAD paths
-- Keep README and skills synchronized with implemented behavior
+**Current focus:** assignment-aligned ORM (`Account` + `Secret`), complete route
+tests, README synced with implemented behavior.
