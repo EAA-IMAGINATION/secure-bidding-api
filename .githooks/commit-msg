@@ -1,0 +1,19 @@
+#!/bin/sh
+# Course rule: no AI co-author trailers. Strip, then reject if any remain.
+
+MSG_FILE="$1"
+if [ ! -f "$MSG_FILE" ]; then
+  exit 0
+fi
+
+sed -i.bak \
+  -e '/^Co-authored-by:.*[Cc]opilot/d' \
+  -e '/^Co-authored-by:.*[Cc]ursor/d' \
+  -e '/^Co-authored-by:.*OpenAI/d' \
+  -e '/^Co-authored-by:.*Anthropic/d' \
+  "$MSG_FILE" && rm -f "$MSG_FILE.bak"
+
+if grep -qiE '^Co-authored-by:.*(copilot|cursor|openai|anthropic)' "$MSG_FILE"; then
+  echo "ERROR: Remove AI Co-authored-by trailers from the commit message (course rule)."
+  exit 1
+fi

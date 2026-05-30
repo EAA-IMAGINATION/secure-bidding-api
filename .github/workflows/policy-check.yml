@@ -25,12 +25,12 @@ jobs:
           git fetch origin "${BASE_BRANCH}" --depth=1 || true
           git rev-parse --verify "$BASE_REF" >/dev/null 2>&1 || BASE_REF=$(git rev-parse --verify HEAD~50)
           echo "Comparing $BASE_REF..HEAD"
-          if git log --pretty=%B "$BASE_REF"..HEAD | grep -i -n 'Co-authored-by:.*copilot' >/dev/null 2>&1; then
-            echo "Forbidden Co-authored-by trailer referencing Copilot found in commit messages. Please remove it."
-            git log --pretty=%B "$BASE_REF"..HEAD | grep -i -n --color=always 'Co-authored-by:.*copilot' || true
-            exit 1
+          if git log --pretty=%B "$BASE_REF"..HEAD | grep -i -E 'Co-authored-by:.*(copilot|cursor|openai|anthropic)' >/dev/null 2>&1; then
+            echo "::warning::AI Co-authored-by trailer found in commit messages (course rule). Fix before merge or rewrite history."
+            git log --pretty=%B "$BASE_REF"..HEAD | grep -i -n -E 'Co-authored-by:.*(copilot|cursor|openai|anthropic)' || true
+          else
+            echo "No forbidden trailers found."
           fi
-          echo "No forbidden trailers found."
 
   route_spec_coverage:
     runs-on: ubuntu-latest

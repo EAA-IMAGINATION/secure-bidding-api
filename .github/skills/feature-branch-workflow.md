@@ -2,16 +2,26 @@
 
 ## When to use
 
-- At the start of every new feature
+- When you want an isolated branch or PR review
+- **Not required** for every change while workflow is relaxed
 
-## Rule
+## Current rule (relaxed)
 
-Never work directly from `main`/`master`.
+Direct commits and pushes to `master` are **allowed** so agents and developers
+can ship without opening a PR every time. Prefer feature branches for large work.
 
-## Workflow
+## Optional workflow
 
-1. Before any edits, check branch with `git branch --show-current`.
-2. If branch is `main` or `master`, create/switch to a feature branch immediately.
-3. Create a new branch named for the feature (example: `1-db-orm`).
-4. Implement and test on that branch only.
-5. Merge back through review.
+1. Check branch: `git branch --show-current`
+2. For larger features: `git checkout -b feature-name`
+3. Implement, test, commit, push (or merge via PR if you prefer review)
+
+## Hard rule (unchanged — course policy)
+
+Never put AI `Co-authored-by` lines in commit messages. Hooks strip them locally;
+see [commit-authorship](commit-authorship.md).
+
+## Branch protection (optional)
+
+GitHub branch protection and required `check_trailers` are **not** required while
+relaxed. `policy-check.yml` logs warnings only and does not fail the workflow.

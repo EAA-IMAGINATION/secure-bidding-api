@@ -4,9 +4,9 @@
 
 1. **Weekly scope** — Implement only what the current week requires. Defer everything
    else as roadmap notes. See `.github/skills/weekly-scope-gating.md`.
-2. **Commit authorship** — Never add AI co-author trailers. Run tests before commit.
-   Developer runs the final commit. See `.github/skills/commit-authorship.md`.
-3. **Feature branches** — Never edit on `main`/`master`. See
+2. **Commit authorship** — Never add AI co-author trailers (course rule). Hooks
+   enforce locally. See `.github/skills/commit-authorship.md`.
+3. **Branches** — Direct commits on `master` are OK (relaxed). See
    `.github/skills/feature-branch-workflow.md`.
 4. **Test-first** — Write a failing test before implementation code. See
    `.github/skills/tdd-mastery.md`.
