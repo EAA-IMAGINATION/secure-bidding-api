@@ -8,50 +8,50 @@ module SecureBidding
       end
 
       def show?
-        published? || manage? || admin?
+        published? || admin? || (email_verified? && manage?)
       end
 
       def create?
-        authenticated? && !admin?
+        authenticated? && !admin? && email_verified?
       end
 
       def update?
-        manage?
+        email_verified? && manage?
       end
 
       def destroy?
-        manage?
+        email_verified? && manage?
       end
 
       def manage_memberships?
-        manage?
+        email_verified? && manage?
       end
 
       def accept_ownership?
-        authenticated? && pending_owner_request?
+        email_verified? && pending_owner_request?
       end
 
       def bid?
-        authenticated? && published? && !manage?
+        authenticated? && email_verified? && published? && !manage?
       end
 
       def view_memberships?
-        manage?
+        email_verified? && manage?
       end
 
       def view_bid_submissions?
         return false unless authenticated?
 
-        manage? && bidding_closed?
+        email_verified? && manage? && bidding_closed?
       end
 
       # Safe count before deadline; no bid payloads.
       def view_bid_count?
-        manage?
+        email_verified? && manage?
       end
 
       def manage_milestones?
-        manage?
+        email_verified? && manage?
       end
 
       # Used by other policies (payments, bid submissions).
@@ -87,7 +87,7 @@ module SecureBidding
           end
 
           account_id = subject_account_id
-          if account_id.nil?
+          if account_id.nil? || !email_verified?
             return scope.where(state: 'published').order(:id).all
           end
 

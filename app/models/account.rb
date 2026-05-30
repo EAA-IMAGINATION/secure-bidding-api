@@ -88,6 +88,7 @@ module SecureBidding
 
     def capabilities
       privileged = system_role?('admin') || system_role?('system_admin')
+      verified = !email_verified_at.nil?
       {
         admin: system_role?('admin'),
         system_admin: system_role?('system_admin'),
@@ -95,7 +96,7 @@ module SecureBidding
         bidder: system_role?('bidder'),
         can_manage_accounts: privileged,
         can_assign_system_roles: privileged,
-        can_create_projects: !privileged
+        can_create_projects: !privileged && verified
       }
     end
 

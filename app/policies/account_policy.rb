@@ -71,7 +71,7 @@ module SecureBidding
           bidder: subject_has_system_role?('bidder'),
           can_manage_accounts: admin?,
           can_assign_system_roles: admin?,
-          can_create_projects: authenticated? && !admin?
+          can_create_projects: authenticated? && !admin? && email_verified?
         }
       end
     end

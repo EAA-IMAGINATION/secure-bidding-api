@@ -91,9 +91,14 @@ module SecureBidding
           return { error: 'Authentication required to create projects' }
         end
 
-        unless app.project_policy(Project.new).create?
+        policy = app.project_policy(Project.new)
+        unless policy.create?
           app.response.status = 403
-          return { error: 'Forbidden: system administrators cannot create projects' }
+          role = app.auth_account&.dig(:system_role) || app.auth_account&.dig('system_role')
+          if role == 'admin' || role == 'system_admin'
+            return { error: 'Forbidden: system administrators cannot create projects' }
+          end
+          return { error: 'Forbidden: verify your email before creating projects' }
         end
 
         data = app.parse_json_request_body

@@ -15,10 +15,12 @@ describe 'API /api/v1/projects' do
     SecureBidding::App.freeze.app
   end
 
-  def create_account(username:, email:)
+  def create_account(username:, email:, verified: true)
     account = SecureBidding::Account.new(username: username, system_role: 'member')
     account.set_password('my-secret-pass')
     account.set_email(email)
+    account.save
+    account.verify_email! if verified && account.email_verified_at.nil?
     account.save
     account
   end
@@ -466,6 +468,38 @@ describe 'API /api/v1/projects' do
     _(last_response.status).must_equal 404
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'No pending ownership request found'
+  end
+
+  it 'SAD: unverified member cannot create projects' do
+    account = create_account(username: 'unverified-creator', email: 'unverified-creator@example.com', verified: false)
+
+    post '/api/v1/projects',
+         { title: 'blocked-project', budget_cents: 12_000 }.to_json,
+         auth_header_for(account)
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Forbidden: verify your email before creating projects'
+  end
+
+  it 'SAD: unverified member only sees published projects in list scope' do
+    owner = create_account(username: 'verified-owner-scope', email: 'verified-owner-scope@example.com')
+    unverified = create_account(username: 'unverified-scope', email: 'unverified-scope@example.com', verified: false)
+
+    post '/api/v1/projects',
+         { title: 'draft-only', budget_cents: 15_000 }.to_json,
+         auth_header_for(owner)
+    draft_id = JSON.parse(last_response.body)['id']
+
+    SecureBidding::Project.create(title: 'public-listing', budget_cents: 18_000, state: 'published')
+
+    get '/api/v1/projects', '', auth_header_for(unverified)
+
+    _(last_response.status).must_equal 200
+    titles = JSON.parse(last_response.body)['projects'].map { |p| p['title'] }
+    _(titles).must_include 'public-listing'
+    _(titles).wont_include 'draft-only'
+    _(JSON.parse(last_response.body)['projects'].map { |p| p['id'] }).wont_include draft_id
   end
 
   it 'SAD: non-owner cannot add project memberships' do
