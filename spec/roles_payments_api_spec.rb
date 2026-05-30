@@ -20,6 +20,8 @@ describe 'API role and payment placeholders' do
     account.set_password('my-secret-pass')
     account.set_email(email)
     account.save
+    account.verify_email! if account.email_verified_at.nil?
+    account.save
     account
   end
 

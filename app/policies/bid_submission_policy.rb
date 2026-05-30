@@ -14,7 +14,7 @@ module SecureBidding
       end
 
       def create?
-        authenticated?
+        authenticated? && email_verified?
       end
 
       class Scope < BasePolicy::Scope

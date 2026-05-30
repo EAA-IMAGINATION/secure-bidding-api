@@ -66,6 +66,17 @@ module SecureBidding
         def admin?
           subject_has_system_role?('admin') || subject_has_system_role?('system_admin')
         end
+
+        def email_verified?
+          return true if admin?
+          return false if subject.nil?
+
+          account_id = subject_account_id
+          return false if account_id.nil?
+
+          account = SecureBidding::Account[account_id]
+          account && !account.email_verified_at.nil?
+        end
       end
 
       private
@@ -106,6 +117,23 @@ module SecureBidding
 
       def authenticated?
         !subject.nil?
+      end
+
+      def email_verified?
+        return true if admin?
+        return false unless authenticated?
+
+        account = subject_account_record
+        account && !account.email_verified_at.nil?
+      end
+
+      def subject_account_record
+        return subject if subject.is_a?(SecureBidding::Account)
+
+        account_id = subject_account_id
+        return nil if account_id.nil?
+
+        SecureBidding::Account[account_id]
       end
     end
   end
