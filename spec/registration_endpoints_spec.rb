@@ -134,7 +134,9 @@ describe 'API /api/v1/auth registration endpoints' do
 
       _(last_response.status).must_equal 400
       response_body = JSON.parse(last_response.body)
-      _(response_body['error']).must_include 'required'
+      error = response_body['error']
+      error_text = error.is_a?(Hash) ? error.values.flatten.join(' ') : error.to_s
+      _(error_text).must_match(/missing|required/i)
     end
 
     it 'returns 422 for taken email' do

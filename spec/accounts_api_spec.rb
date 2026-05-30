@@ -89,7 +89,8 @@ describe 'API /api/v1/accounts' do
     _(last_response.status).must_equal 200
     response_body = JSON.parse(last_response.body)
     _(response_body['accounts']).must_be_kind_of Array
-    _(response_body['accounts'].length).must_equal 2
+    _(response_body['accounts'].length).must_equal 1
+    _(response_body['accounts'].map { |row| row['id'] }).wont_include admin.id
   end
 
   it 'HAPPY: searches accounts by email on GET /api/v1/accounts/search' do
@@ -115,7 +116,9 @@ describe 'API /api/v1/accounts' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'username, password, and email are required'
+    _(response_body['error']).must_be_kind_of Hash
+    _(response_body['error']['password']).wont_be_nil
+    _(response_body['error']['email']).wont_be_nil
   end
 
   it 'SAD: rejects account creation with invalid system_role' do
@@ -149,15 +152,41 @@ describe 'API /api/v1/accounts' do
     _(response_body['error']).must_equal 'email or phone query parameter is required'
   end
 
-  it 'HAPPY: updates account fields with PATCH /api/v1/accounts/:id when admin' do
+  it 'HAPPY: updates own account fields with PATCH /api/v1/accounts/:id' do
+    account = SecureBidding::Account.new(username: 'updatable-user', system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email('updatable-user@example.com')
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    patch "/api/v1/accounts/#{account.id}",
+          { phone: '+886911222333' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['id']).must_equal account.id
+    _(response_body['status']).must_equal 'updated'
+
+    updated = SecureBidding::Account[account.id]
+    _(updated.system_role).must_equal 'member'
+    _(updated.phone).must_equal '+886911222333'
+  end
+
+  it 'SAD: admin cannot update another member account profile' do
     admin = SecureBidding::Account.new(username: 'patch-admin', system_role: 'admin')
     admin.set_password('my-secret-pass')
     admin.set_email('patch-admin@example.com')
     admin.save
 
-    account = SecureBidding::Account.new(username: 'updatable-user', system_role: 'member')
+    account = SecureBidding::Account.new(username: 'locked-user', system_role: 'member')
     account.set_password('my-secret-pass')
-    account.set_email('updatable-user@example.com')
+    account.set_email('locked-user@example.com')
     account.save
 
     token = SecureBidding::AuthToken.tokenize(
@@ -167,17 +196,10 @@ describe 'API /api/v1/accounts' do
     headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
 
     patch "/api/v1/accounts/#{account.id}",
-          { phone: '+886911222333', system_role: 'admin' }.to_json,
+          { phone: '+886911222333' }.to_json,
           headers
 
-    _(last_response.status).must_equal 200
-    response_body = JSON.parse(last_response.body)
-    _(response_body['id']).must_equal account.id
-    _(response_body['status']).must_equal 'updated'
-
-    updated = SecureBidding::Account[account.id]
-    _(updated.system_role).must_equal 'admin'
-    _(updated.phone).must_equal '+886911222333'
+    _(last_response.status).must_equal 403
   end
 
   it 'HAPPY: member can update own username email and password' do
@@ -234,18 +256,13 @@ describe 'API /api/v1/accounts' do
   end
 
   it 'SAD: rejects account update without updatable fields' do
-    admin = SecureBidding::Account.new(username: 'no-update-admin', system_role: 'admin')
-    admin.set_password('my-secret-pass')
-    admin.set_email('no-update-admin@example.com')
-    admin.save
-
     account = SecureBidding::Account.new(username: 'no-update-user', system_role: 'member')
     account.set_password('my-secret-pass')
     account.set_email('no-update-user@example.com')
     account.save
 
     token = SecureBidding::AuthToken.tokenize(
-      { account_id: admin.id, username: admin.username, system_role: admin.system_role },
+      { account_id: account.id, username: account.username, system_role: account.system_role },
       SecureBidding::AuthToken::ONE_HOUR
     )
     headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }

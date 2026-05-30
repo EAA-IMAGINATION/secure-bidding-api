@@ -84,7 +84,7 @@ describe 'API role and payment placeholders' do
     _(last_response.status).must_equal 201
     project_id = JSON.parse(last_response.body)['id']
 
-    get "/api/v1/projects/#{project_id}/memberships"
+    get "/api/v1/projects/#{project_id}/memberships", '', auth_header_for(owner)
     _(last_response.status).must_equal 200
     memberships = JSON.parse(last_response.body)['memberships']
     owner_membership = memberships.find { |entry| entry['account_id'] == owner.id }
@@ -221,16 +221,16 @@ describe 'API role and payment placeholders' do
            method: 'placeholder',
            reference: 'stub-001'
          }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+         auth_header_for(owner)
     _(last_response.status).must_equal 201
     payment_id = JSON.parse(last_response.body)['id']
 
     patch "/api/v1/payments/#{payment_id}",
           { paid: true }.to_json,
-          { 'CONTENT_TYPE' => 'application/json' }
+          auth_header_for(owner)
     _(last_response.status).must_equal 200
 
-    get "/api/v1/payments/#{payment_id}"
+    get "/api/v1/payments/#{payment_id}", '', auth_header_for(owner)
     _(last_response.status).must_equal 200
     payment_payload = JSON.parse(last_response.body)
     _(payment_payload['paid']).must_equal true

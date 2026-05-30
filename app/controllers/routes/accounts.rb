@@ -83,7 +83,9 @@ module SecureBidding
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        SecureBidding::Forms::AccountsCreateForm.new.call(data)
+        result = SecureBidding::Forms::AccountsCreateForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         result = SecureBidding::Services::Accounts::CreateAccount.call(data)
         if result[:ok]
@@ -96,7 +98,9 @@ module SecureBidding
       end
 
       def self.search_accounts(req, app)
-        SecureBidding::Forms::AccountsSearchForm.new.call(req.params)
+        result = SecureBidding::Forms::AccountsSearchForm.new.call(req.params)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         result = SecureBidding::Services::Accounts::SearchAccounts.call(
           email: req.params['email'],
@@ -134,7 +138,9 @@ module SecureBidding
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        SecureBidding::Forms::AccountsSystemRoleForm.new.call(data)
+        result = SecureBidding::Forms::AccountsSystemRoleForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         result = SecureBidding::Services::Roles::AssignSystemRole.call(
           account_id: id,
@@ -178,7 +184,9 @@ module SecureBidding
           data = app.parse_json_request_body
           return data if app.response.status == 400
 
-          SecureBidding::Forms::AccountsUpdateForm.new.call(data)
+          form_result = SecureBidding::Forms::AccountsUpdateForm.new.call(data)
+          validation_error = SecureBidding::FormValidation.response_for(app, form_result)
+          return validation_error if validation_error
 
           result = SecureBidding::Services::Accounts::UpdateAccount.call(
             account,
@@ -234,12 +242,12 @@ module SecureBidding
         auth = app.auth_account
         return false unless auth
 
-        if auth.is_a?(Hash)
-          # Check both string and symbol keys
-          auth['system_role'] == 'admin' || auth[:system_role] == 'admin'
-        else
-          auth.system_role == 'admin'
-        end
+        role = if auth.is_a?(Hash)
+                 auth['system_role'] || auth[:system_role]
+               else
+                 auth.system_role
+               end
+        %w[admin system_admin].include?(role.to_s)
       end
 
       def self.account_owner?(app, account_id)

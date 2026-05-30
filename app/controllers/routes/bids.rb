@@ -66,6 +66,7 @@ module SecureBidding
       def self.show_for_id(req, app, id)
         bid = Bid.find(id)
         return not_found_response(req) unless bid
+        return not_found_response(req) unless app.bid_policy(bid).show?
 
         found_response(app, bid)
       end

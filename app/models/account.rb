@@ -87,14 +87,15 @@ module SecureBidding
     end
 
     def capabilities
+      privileged = system_role?('admin') || system_role?('system_admin')
       {
         admin: system_role?('admin'),
         system_admin: system_role?('system_admin'),
         project_owner: system_role?('project_owner'),
         bidder: system_role?('bidder'),
-        can_manage_accounts: system_role?('admin'),
-        can_assign_system_roles: system_role?('admin'),
-        can_create_projects: system_role?('admin') || system_role?('project_owner')
+        can_manage_accounts: privileged,
+        can_assign_system_roles: privileged,
+        can_create_projects: !privileged
       }
     end
 

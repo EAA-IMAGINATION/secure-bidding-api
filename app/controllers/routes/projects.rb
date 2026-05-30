@@ -42,6 +42,22 @@ module SecureBidding
             end
           end
 
+          req.on 'bid_count' do
+            req.get true do
+              get_project_bid_count(req, app, id)
+            end
+          end
+
+          req.on 'milestones' do
+            req.get true do
+              list_project_milestones(req, app, id)
+            end
+
+            req.post true do
+              create_project_milestone(req, app, id)
+            end
+          end
+
           req.get true do
             get_project(req, app, id)
           end
@@ -64,7 +80,7 @@ module SecureBidding
 
       def self.list_projects(_req, app)
         projects = SecureBidding::Policies::ProjectPolicy::Scope.new(app.auth_account, Project).resolve.map do |project|
-          app.project_response(project)
+          app.project_response(project, policy: app.project_policy(project))
         end
         { projects: projects }
       end
@@ -75,10 +91,17 @@ module SecureBidding
           return { error: 'Authentication required to create projects' }
         end
 
+        unless app.project_policy(Project.new).create?
+          app.response.status = 403
+          return { error: 'Forbidden: system administrators cannot create projects' }
+        end
+
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        SecureBidding::Forms::ProjectsCreateForm.new.call(data)
+        result = SecureBidding::Forms::ProjectsCreateForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         create_project_from_auth_token(app, data)
       rescue Sequel::MassAssignmentRestriction
@@ -175,7 +198,9 @@ module SecureBidding
           return { error: 'Forbidden: only project owner or admin can manage project memberships' }
         end
 
-        SecureBidding::Forms::ProjectsRoleForm.new.call(data)
+        result = SecureBidding::Forms::ProjectsRoleForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         result = SecureBidding::Services::Projects::AssignProjectRole.call(
           project_id: id,
@@ -275,7 +300,9 @@ module SecureBidding
           return { error: 'Project owner cannot bid on own project' }
         end
 
-        SecureBidding::Forms::ProjectsBidForm.new.call(data)
+        result = SecureBidding::Forms::ProjectsBidForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         result = SecureBidding::Services::Projects::CreateBidForProject.call(
           project_id: id,
@@ -303,6 +330,72 @@ module SecureBidding
         else
           app.response.status = 404
           { error: 'Project not found' }
+        end
+      end
+
+      def self.get_project_bid_count(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        if project && app.project_policy(project).view_bid_count?
+          {
+            project_id: project.id,
+            bid_count: project.bid_submissions_dataset.count
+          }
+        else
+          app.response.status = 404
+          { error: 'Project not found' }
+        end
+      end
+
+      def self.list_project_milestones(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        if project && app.project_policy(project).manage_milestones?
+          milestones = project.milestones_dataset.order(:sequence_order, :id).all.map do |milestone|
+            app.milestone_response(milestone, policy: app.milestone_policy(milestone))
+          end
+          { project_id: project.id, milestones: milestones }
+        else
+          app.response.status = 404
+          { error: 'Project not found' }
+        end
+      end
+
+      def self.create_project_milestone(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        unless app.project_policy(project).manage_milestones?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owner or admin can manage milestones' }
+        end
+
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        result = SecureBidding::Services::Projects::CreateMilestone.call(project: project, payload: data)
+        if result[:ok]
+          app.response.status = 201
+          app.milestone_response(result[:milestone], policy: app.milestone_policy(result[:milestone]))
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
         end
       end
 
@@ -344,7 +437,9 @@ module SecureBidding
         update_data = app.parse_json_request_body
         return update_data if app.response.status == 400
 
-        SecureBidding::Forms::ProjectsUpdateForm.new.call(update_data)
+        result = SecureBidding::Forms::ProjectsUpdateForm.new.call(update_data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
 
         if update_data.key?('state') && !Project::VALID_STATES.include?(update_data['state'])
           app.response.status = 400
@@ -389,11 +484,12 @@ module SecureBidding
         auth = app.auth_account
         return false unless auth
 
-        if auth.is_a?(Hash)
-          auth['system_role'] == 'admin' || auth[:system_role] == 'admin'
-        else
-          auth.system_role == 'admin'
-        end
+        role = if auth.is_a?(Hash)
+                 auth['system_role'] || auth[:system_role]
+               else
+                 auth.system_role
+               end
+        %w[admin system_admin].include?(role.to_s)
       end
 
       def self.owns_project?(app, project_id)

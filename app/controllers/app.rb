@@ -107,10 +107,29 @@ module SecureBidding
       payload = {
         id: payment.id,
         bid_submission_id: payment.bid_submission_id,
+        milestone_id: payment.milestone_id,
+        project_id: payment.project_id,
+        payment_type: payment.payment_type,
+        status: payment.status,
         paid: payment.paid,
         method: payment[:method],
         reference: payment.reference,
         paid_at: payment.paid_at
+      }
+      payload[:policy] = policy.summary if policy
+      payload
+    end
+
+    def milestone_response(milestone, policy: nil)
+      payload = {
+        id: milestone.id,
+        project_id: milestone.project_id,
+        title: milestone.title,
+        description: milestone.description,
+        budget_cents: milestone.budget_cents,
+        assigned_bidder_id: milestone.assigned_bidder_id,
+        state: milestone.state,
+        sequence_order: milestone.sequence_order
       }
       payload[:policy] = policy.summary if policy
       payload
@@ -145,6 +164,10 @@ module SecureBidding
 
     def bid_policy(bid)
       SecureBidding::Policies::BidPolicy.new(auth_account, bid)
+    end
+
+    def milestone_policy(milestone)
+      SecureBidding::Policies::MilestonePolicy.new(auth_account, milestone)
     end
 
     def project_membership_response(membership)
