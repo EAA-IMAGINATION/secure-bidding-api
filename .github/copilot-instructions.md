@@ -12,11 +12,13 @@
 | **This file** | Copilot reads it automatically in this repo | Every Copilot session |
 | **Skills** (`.github/skills/`) | Playbooks Copilot reads when pointed to them | When a task matches the trigger |
 | **Git hooks** (`.githooks/`) | Block default-branch commits; strip AI trailers | Every local commit after hook setup |
-| **GitHub Actions** (`policy-check.yml`) | Fail PR/push if AI trailers exist in commit history | Every push and PR |
+| **GitHub Actions** | See [repo-policy-enforcement](.github/skills/repo-policy-enforcement.md) | Every push and PR |
 
 Copilot does **not** automatically read every skill file — it follows this index.
 Workflows do **not** instruct Copilot; they **enforce** rules after push.
 Hooks only work locally after: `git config core.hooksPath .githooks`
+
+Full parity table: [repo-policy-enforcement](.github/skills/repo-policy-enforcement.md)
 
 ## Hard Rules
 
@@ -33,6 +35,7 @@ Hooks only work locally after: `git config core.hooksPath .githooks`
 | Priority | Trigger | Skill |
 | --- | --- | --- |
 | **#1** | Before every commit | [commit-authorship](.github/skills/commit-authorship.md) |
+| Required | Clone setup / CI failures | [repo-policy-enforcement](.github/skills/repo-policy-enforcement.md) |
 | Required | Every task start | [weekly-scope-gating](.github/skills/weekly-scope-gating.md) |
 | Required | New feature start | [feature-branch-workflow](.github/skills/feature-branch-workflow.md) |
 | Required | Behavior changes | [tdd-mastery](.github/skills/tdd-mastery.md) |

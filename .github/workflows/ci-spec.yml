@@ -1,0 +1,30 @@
+name: CI - Load test secrets and run specs
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Copy test secrets
+        run: cp config/secrets-example.yml config/secrets.yml
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          bundler-cache: true
+
+      - name: Install dependencies
+        run: bundle install --jobs 4 --retry 3
+
+      - name: Prepare test database
+        run: RACK_ENV=test bundle exec rake db:migrate
+
+      - name: Run specs
+        run: bundle exec rake spec
