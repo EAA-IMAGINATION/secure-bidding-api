@@ -28,6 +28,9 @@ The `pre-commit` hook blocks commits on `main`/`master` when hooks are enabled:
 git config core.hooksPath .githooks
 ```
 
+See [repo-policy-enforcement](repo-policy-enforcement.md) for the full hook and
+CI parity table.
+
 ## GitHub branch protection (remote)
 
 Protect the default branch on GitHub so direct pushes are rejected even without

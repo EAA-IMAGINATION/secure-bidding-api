@@ -39,8 +39,5 @@ git config core.hooksPath .githooks
 chmod +x .githooks/pre-commit .githooks/prepare-commit-msg
 ```
 
-## What Copilot cannot do for you
-
-Copilot reads `.github/copilot-instructions.md` and skills when pointed to them,
-but it does **not** run hooks or workflows. Hooks are local git. Workflows run on
-GitHub after push. Both must be configured separately from Copilot instructions.
+See [repo-policy-enforcement](repo-policy-enforcement.md) for the full hooks/CI
+parity table and troubleshooting.
