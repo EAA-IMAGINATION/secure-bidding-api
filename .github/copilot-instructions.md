@@ -1,15 +1,31 @@
 # Copilot Instructions: Secure Bidding API
 
+> **#1 RULE — COMMIT AUTHORSHIP**
+> Never add `Co-authored-by` trailers for **Copilot**, **Cursor**, or any AI tool.
+> Hooks strip and block them before each commit is created. See
+> `.github/skills/commit-authorship.md` before every commit.
+
 ## Hard Rules (read first)
 
-1. **Weekly scope** — Implement only what the current week requires. Defer everything
+1. **Commit authorship** — No Copilot/Cursor co-author lines. See
+   `.github/skills/commit-authorship.md`.
+2. **Weekly scope** — Implement only what the current week requires. Defer everything
    else as roadmap notes. See `.github/skills/weekly-scope-gating.md`.
-2. **Commit authorship** — Never add AI co-author trailers (course rule). Hooks
-   enforce locally. See `.github/skills/commit-authorship.md`.
 3. **Branches** — Direct commits on `master` are OK (relaxed). See
    `.github/skills/feature-branch-workflow.md`.
 4. **Test-first** — Write a failing test before implementation code. See
    `.github/skills/tdd-mastery.md`.
+
+## Git hooks (before every commit)
+
+| Hook | When | Copilot + Cursor |
+| --- | --- | --- |
+| `prepare-commit-msg` | Before commit is created | Strips AI trailers |
+| `commit-msg` | Before commit completes | Strips again; fails if any remain |
+| `pre-commit` | Staged files only | Markdownlint (not authorship) |
+
+Setup once: `git config core.hooksPath .githooks` and
+`chmod +x .githooks/*.sh .githooks/pre-commit .githooks/prepare-commit-msg .githooks/commit-msg`
 
 ## Skill Index
 
@@ -19,7 +35,8 @@ trigger applies.
 | Priority | Trigger | Skill |
 | --- | --- | --- |
 | Required | Every task start | [weekly-scope-gating](.github/skills/weekly-scope-gating.md) |
-| Required | Before commits | [commit-authorship](.github/skills/commit-authorship.md) |
+| **#1** | Before commits | [commit-authorship](.github/skills/commit-authorship.md) |
+| Required | Clone setup / hooks | [repo-policy-enforcement](.github/skills/repo-policy-enforcement.md) |
 | Required | New feature start | [feature-branch-workflow](.github/skills/feature-branch-workflow.md) |
 | Required | Behavior changes | [tdd-mastery](.github/skills/tdd-mastery.md) |
 | High | Routes or models | [mvc-architecture](.github/skills/mvc-architecture.md) |

@@ -1,10 +1,6 @@
 #!/bin/sh
-# Prepare-commit-msg hook: remove any Copilot co-author trailers automatically
-# Usage: this script is intended to be used by setting `git config core.hooksPath .githooks`
+# Runs BEFORE the commit object is created — strips Copilot/Cursor (and other AI) trailers.
+# Enable: git config core.hooksPath .githooks
 
-MSG_FILE="$1"
-# Remove lines that start with Co-authored-by: and contain Copilot
-if [ -f "$MSG_FILE" ]; then
-  # Use sed to delete any Co-authored-by lines referencing Copilot
-  sed -i.bak '/^Co-authored-by:.*Copilot/d' "$MSG_FILE" && rm -f "$MSG_FILE.bak"
-fi
+. "$(dirname "$0")/strip-ai-trailers.sh"
+strip_ai_trailers "$1"

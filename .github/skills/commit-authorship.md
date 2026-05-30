@@ -1,40 +1,47 @@
 # Commit Authorship Skill
 
-## When to use
+**Highest-priority skill.** Read this before every commit.
 
-- Before creating or amending any commit
+## Hard rule (course policy — Copilot AND Cursor)
 
-## Hard rule (course policy — always enforced)
+Never include AI co-author trailers:
 
-Never include AI co-author trailers in commit messages (`Co-authored-by: Copilot`,
-`Co-authored-by: Cursor`, etc.). Agents must **not** add these lines when committing.
+```text
+Co-authored-by: GitHub Copilot
+Co-authored-by: Copilot <...@users.noreply.github.com>
+Co-authored-by: Cursor <cursoragent@cursor.com>
+```
 
-## Before every commit
+Agents must **not** add these lines when drafting or running `git commit`.
+
+## Before every commit (you + hooks)
 
 1. Run tests when code changed (`bundle exec rake spec`).
-2. Keep messages short with **no** AI `Co-authored-by` lines.
-3. Commit; hooks strip accidental trailers and block if any remain.
+2. Draft a message with **no** Copilot/Cursor `Co-authored-by` lines.
+3. Commit locally — hooks enforce authorship **before the commit is created**:
 
-## Local hooks (enable once per clone)
+| Order | Hook | Effect |
+| --- | --- | --- |
+| 1 | `pre-commit` | Markdownlint on staged `.md` only |
+| 2 | `prepare-commit-msg` | Strip Copilot/Cursor/AI trailers from message file |
+| 3 | `commit-msg` | Strip again; **abort** if any AI trailer remains |
+
+Never use `git commit --no-verify` to skip trailer checks.
+
+## One-time setup (each clone)
 
 ```bash
 git config core.hooksPath .githooks
-chmod +x .githooks/pre-commit .githooks/prepare-commit-msg .githooks/commit-msg
+chmod +x .githooks/strip-ai-trailers.sh .githooks/pre-commit .githooks/prepare-commit-msg .githooks/commit-msg
 ```
 
-| Hook | Effect |
-| --- | --- |
-| `prepare-commit-msg` | Removes AI `Co-authored-by` lines before the message is saved |
-| `commit-msg` | Fails the commit if AI trailers are still present |
-| `pre-commit` | Markdownlint on staged `.md` only |
+## CI (advisory)
 
-## CI (relaxed)
-
-`policy-check.yml` prints a **warning** if trailers appear in pushed commits; it
-does not fail the workflow.
+`policy-check.yml` warns on push/PR if history contains Copilot/Cursor trailers.
 
 ## Agent commits
 
-When the user asks you to commit and push: commit on `master` is allowed; never
-use `--no-verify` to bypass trailer hooks; never force-push default branches unless
-the user explicitly requests a history rewrite.
+Direct commits on `master` are allowed. Never add AI trailers; hooks run automatically
+when `core.hooksPath` is set.
+
+See [repo-policy-enforcement](repo-policy-enforcement.md).
