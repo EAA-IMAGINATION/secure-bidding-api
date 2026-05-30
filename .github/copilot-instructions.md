@@ -1,25 +1,39 @@
 # Copilot Instructions: Secure Bidding API
 
-## Hard Rules (read first)
+> **#1 RULE — COMMIT AUTHORSHIP**
+> Never add `Co-authored-by` trailers for Copilot, Cursor, or any AI tool.
+> CI rejects them. The developer is the sole author and runs `git commit`.
+> Read `.github/skills/commit-authorship.md` before every commit.
 
-1. **Weekly scope** — Implement only what the current week requires. Defer everything
-   else as roadmap notes. See `.github/skills/weekly-scope-gating.md`.
-2. **Commit authorship** — Never add AI co-author trailers. Run tests before commit.
-   Developer runs the final commit. See `.github/skills/commit-authorship.md`.
+## How Copilot, skills, hooks, and CI relate
+
+| Layer | What it does | When it runs |
+| --- | --- | --- |
+| **This file** | Copilot reads it automatically in this repo | Every Copilot session |
+| **Skills** (`.github/skills/`) | Playbooks Copilot reads when pointed to them | When a task matches the trigger |
+| **Git hooks** (`.githooks/`) | Block default-branch commits; strip AI trailers | Every local commit after hook setup |
+| **GitHub Actions** (`policy-check.yml`) | Fail PR/push if AI trailers exist in commit history | Every push and PR |
+
+Copilot does **not** automatically read every skill file — it follows this index.
+Workflows do **not** instruct Copilot; they **enforce** rules after push.
+Hooks only work locally after: `git config core.hooksPath .githooks`
+
+## Hard Rules
+
+1. **Commit authorship** — See skill: [commit-authorship](.github/skills/commit-authorship.md)
+2. **Weekly scope** — Implement only the current week. See
+   [weekly-scope-gating](.github/skills/weekly-scope-gating.md)
 3. **Feature branches** — Never edit on `main`/`master`. See
-   `.github/skills/feature-branch-workflow.md`.
-4. **Test-first** — Write a failing test before implementation code. See
-   `.github/skills/tdd-mastery.md`.
+   [feature-branch-workflow](.github/skills/feature-branch-workflow.md)
+4. **Test-first** — Failing test before implementation. See
+   [tdd-mastery](.github/skills/tdd-mastery.md)
 
 ## Skill Index
 
-Use the smallest skill set that covers the task. Read the linked file when the
-trigger applies.
-
 | Priority | Trigger | Skill |
 | --- | --- | --- |
+| **#1** | Before every commit | [commit-authorship](.github/skills/commit-authorship.md) |
 | Required | Every task start | [weekly-scope-gating](.github/skills/weekly-scope-gating.md) |
-| Required | Before commits | [commit-authorship](.github/skills/commit-authorship.md) |
 | Required | New feature start | [feature-branch-workflow](.github/skills/feature-branch-workflow.md) |
 | Required | Behavior changes | [tdd-mastery](.github/skills/tdd-mastery.md) |
 | High | Routes or models | [mvc-architecture](.github/skills/mvc-architecture.md) |
@@ -34,8 +48,6 @@ trigger applies.
 
 ### Future capability (reference only)
 
-Use only when the weekly spec explicitly requires them:
-
 - [crypto-bid-envelope](.github/skills/crypto-bid-envelope.md)
 - [payment-gate-verification](.github/skills/payment-gate-verification.md)
 - [atomic-reveal-timer](.github/skills/atomic-reveal-timer.md)
@@ -44,32 +56,14 @@ Use only when the weekly spec explicitly requires them:
 ## Commands
 
 ```bash
-bundle exec rake spec                              # Full test suite
-bundle exec ruby spec/api_spec.rb                  # API route tests
-bundle exec ruby spec/bid_spec.rb                  # Model tests
-bundle exec rake spec && bundle-audit check        # "Check Progress"
-npx markdownlint-cli2 "**/*.md" "#node_modules"    # After .md edits
+git config core.hooksPath .githooks          # Run once per clone
+bundle exec rake spec
+bundle exec rake spec && bundle-audit check  # "Check Progress"
+npx markdownlint-cli2 "**/*.md" "#node_modules"
 ```
-
-If the repo path contains spaces, use `script/run-tests-from-symlinked-path`
-instead of `bundle exec rake spec` directly.
 
 ## Architecture (reference)
 
-Ruby/Roda API with file-based legacy storage and Sequel/SQLite persistence.
-
-| Layer | Location | Role |
-| --- | --- | --- |
-| Models | `app/models/` | Domain + persistence (`SecureBidding::` namespace) |
-| Controllers | `app/controllers/` | Roda routes and HTTP responses |
-| DB | `app/db/` | SQLite files, migrations, seeds |
-| Legacy store | `app/db/store/` | JSON bid files |
-
-**Conventions:** keyword-arg model initializers; plural tables / singular FKs;
-`require_relative` for internal requires; Minitest spec DSL with `_()` assertions;
-happy + sad route tests; JSON errors as `{ error: "message" }`.
-
-**Stack:** roda, json, rbnacl, sequel, sqlite3; test with rack-test + minitest.
-
-**Current focus:** assignment-aligned ORM (`Account` + `Secret`), complete route
-tests, README synced with implemented behavior.
+Ruby/Roda API — models in `app/models/`, routes in `app/controllers/`,
+Sequel/SQLite in `app/db/`. Minitest spec DSL; happy + sad route tests.
+See prior sections in git history for full conventions.
