@@ -8,7 +8,7 @@ module SecureBidding
       end
 
       def show?
-        true
+        subject.nil? || admin? || own_record?
       end
 
       def create?
@@ -16,11 +16,11 @@ module SecureBidding
       end
 
       def update?
-        admin? || own_record?
+        own_record?
       end
 
       def destroy?
-        admin?
+        admin? && !own_record?
       end
 
       def search?
@@ -41,9 +41,14 @@ module SecureBidding
 
       class Scope < BasePolicy::Scope
         def resolve
-          return scope.order(:id).all if admin?
+          return scope.where(false).order(:id).all unless admin?
 
-          []
+          account_id = subject_account_id
+          if account_id.nil?
+            scope.order(:id).all
+          else
+            scope.exclude(id: account_id).order(:id).all
+          end
         end
       end
 
@@ -66,7 +71,7 @@ module SecureBidding
           bidder: subject_has_system_role?('bidder'),
           can_manage_accounts: admin?,
           can_assign_system_roles: admin?,
-          can_create_projects: admin? || subject_has_system_role?('project_owner')
+          can_create_projects: authenticated? && !admin?
         }
       end
     end

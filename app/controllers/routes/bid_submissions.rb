@@ -39,7 +39,10 @@ module SecureBidding
         return data if app.response.status == 400
 
         payload = data
-        SecureBidding::Forms::BidSubmissionsCreateForm.new.call(data)
+        result = SecureBidding::Forms::BidSubmissionsCreateForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
+
         project_id = payload['project_id'] || payload[:project_id]
         contractor_alias = payload['contractor_alias'] || payload[:contractor_alias]
         plaintext_bid = payload['plaintext_bid'] || payload[:plaintext_bid]

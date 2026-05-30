@@ -73,7 +73,10 @@ module SecureBidding
 
       def self.handle_register(req, app)
         data = HttpRequest.new(req).body_data
-        SecureBidding::Forms::RegisterForm.new.call(data)
+        result = SecureBidding::Forms::RegisterForm.new.call(data)
+        unless result.success?
+          return req.halt(400, { error: result.errors.to_h }.to_json)
+        end
 
         username = data[:username].to_s.strip
         email = data[:email].to_s.strip

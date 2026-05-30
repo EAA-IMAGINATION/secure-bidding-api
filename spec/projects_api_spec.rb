@@ -68,6 +68,26 @@ describe 'API /api/v1/projects' do
     _(stored.state).must_equal 'published'
   end
 
+  it 'HAPPY: returns bid count for project owner without bid payloads' do
+    owner = create_account(username: 'count-owner', email: 'count-owner@example.com')
+    bidder = create_account(username: 'count-bidder', email: 'count-bidder@example.com')
+
+    post '/api/v1/projects',
+         { title: 'count-project', budget_cents: 50_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post '/api/v1/bid_submissions',
+         { project_id: project_id, contractor_alias: 'bidder-a', plaintext_bid: 'secret' }.to_json,
+         auth_header_for(bidder)
+    _(last_response.status).must_equal 201
+
+    get "/api/v1/projects/#{project_id}/bid_count", '', auth_header_for(owner)
+    _(last_response.status).must_equal 200
+    body = JSON.parse(last_response.body)
+    _(body['bid_count']).must_equal 1
+  end
+
   it 'HAPPY: lists only published projects with GET /api/v1/projects' do
     SecureBidding::Project.create(title: 'p1', budget_cents: 10_000, state: 'saved')
     SecureBidding::Project.create(title: 'p2', budget_cents: 20_000, state: 'published')
@@ -110,7 +130,7 @@ describe 'API /api/v1/projects' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'title and budget_cents are required'
+    _(response_body['error']).must_be_kind_of Hash
   end
 
   it 'SAD: rejects non-numeric budget_cents' do
@@ -122,7 +142,9 @@ describe 'API /api/v1/projects' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'budget_cents must be a non-negative integer'
+    error = response_body['error']
+    message = error.is_a?(Hash) ? error.values.flatten.join(' ') : error.to_s
+    _(message).must_match(/integer/i)
   end
 
   it 'SAD: rejects invalid project state value' do
@@ -164,7 +186,10 @@ describe 'API /api/v1/projects' do
     _(last_response.status).must_equal 201
     bid_submission_id = JSON.parse(last_response.body)['id']
 
-    get "/api/v1/projects/#{project_id}/bid_submissions"
+    project = SecureBidding::Project[project_id]
+    project.update(bidding_deadline: Time.now - 60)
+
+    get "/api/v1/projects/#{project_id}/bid_submissions", '', auth_header_for(creator)
     _(last_response.status).must_equal 200
     response_body = JSON.parse(last_response.body)
     _(response_body['project_id']).must_equal project_id
@@ -347,7 +372,9 @@ describe 'API /api/v1/projects' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_include 'budget_cents must be a non-negative integer'
+    error = response_body['error']
+    message = error.is_a?(Hash) ? error.values.flatten.join(' ') : error.to_s
+    _(message).must_match(/integer/i)
   end
 
   it 'HAPPY: owner-created co-owner request stays pending until collaborator accepts' do

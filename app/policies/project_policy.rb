@@ -4,27 +4,27 @@ module SecureBidding
   module Policies
     class ProjectPolicy < BasePolicy
       def index?
-        true
-      end
-
-      def show?
-        published? || managed_by_subject?
-      end
-
-      def create?
         authenticated?
       end
 
+      def show?
+        published? || manage? || admin?
+      end
+
+      def create?
+        authenticated? && !admin?
+      end
+
       def update?
-        admin? || managed_by_subject?
+        manage?
       end
 
       def destroy?
-        admin? || managed_by_subject?
+        manage?
       end
 
       def manage_memberships?
-        admin? || managed_by_subject?
+        manage?
       end
 
       def accept_ownership?
@@ -32,20 +32,70 @@ module SecureBidding
       end
 
       def bid?
-        authenticated? && published? && !managed_by_subject?
+        authenticated? && published? && !manage?
       end
 
       def view_memberships?
-        true
+        manage?
       end
 
       def view_bid_submissions?
-        true
+        return false unless authenticated?
+
+        manage? && bidding_closed?
+      end
+
+      # Safe count before deadline; no bid payloads.
+      def view_bid_count?
+        manage?
+      end
+
+      def manage_milestones?
+        manage?
+      end
+
+      # Used by other policies (payments, bid submissions).
+      def manage?
+        admin? || managed_by_subject?
+      end
+
+      def self.managed_project_ids_for(account_id)
+          owner_role = SecureBidding::Role.ensure_role('project_owner')
+          membership_ids = if owner_role.nil?
+                             []
+                           else
+                             SecureBidding::ProjectMembership
+                               .where(account_id: account_id, role_id: owner_role.id)
+                               .select_map(:project_id)
+                           end
+
+          collaboration_ids = SecureBidding::AccountProject
+                                .where(account_id: account_id)
+                                .where(Sequel.|(
+                                  { collaboration_role: 'owner' },
+                                  { collaboration_role: 'pending_owner' }
+                                ))
+                                .select_map(:project_id)
+
+          (membership_ids + collaboration_ids).uniq
       end
 
       class Scope < BasePolicy::Scope
         def resolve
-          scope.where(state: 'published').order(:id).all
+          if admin?
+            return scope.order(:id).all
+          end
+
+          account_id = subject_account_id
+          if account_id.nil?
+            return scope.where(state: 'published').order(:id).all
+          end
+
+          published_ids = scope.where(state: 'published').select_map(:id)
+          managed_ids = ProjectPolicy.managed_project_ids_for(account_id)
+          visible_ids = (published_ids + managed_ids).uniq
+
+          scope.where(id: visible_ids).order(:id).all
         end
       end
 
@@ -55,8 +105,16 @@ module SecureBidding
         record.state == 'published'
       end
 
+      def bidding_closed?
+        deadline = record.bidding_deadline
+        return false if deadline.nil?
+
+        Time.now >= deadline
+      end
+
       def managed_by_subject?
         return false unless authenticated?
+        return false if record.nil?
 
         owner_role = SecureBidding::Role.ensure_role('project_owner')
         return false if owner_role.nil?
@@ -77,7 +135,7 @@ module SecureBidding
 
       def pending_owner_request?
         account_id = subject_account_id
-        return false if account_id.nil?
+        return false if account_id.nil? || record.nil?
 
         collaboration = SecureBidding::AccountProject.first(account_id: account_id, project_id: record.id)
         !collaboration.nil? && collaboration.collaboration_role == 'pending_owner'

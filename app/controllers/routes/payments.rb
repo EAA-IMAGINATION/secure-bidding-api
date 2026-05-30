@@ -11,6 +11,20 @@ module SecureBidding
       end
 
       def self.handle_payments(req, app)
+        req.on 'escrow' do
+          req.on 'fund' do
+            req.post true do
+              fund_escrow(req, app)
+            end
+          end
+
+          req.on 'release' do
+            req.post true do
+              release_escrow(req, app)
+            end
+          end
+        end
+
         req.post true do
           create_payment(req, app)
         end
@@ -26,11 +40,82 @@ module SecureBidding
         end
       end
 
+      def self.fund_escrow(_req, app)
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        milestone_id = data['milestone_id'] || data[:milestone_id]
+        milestone = Milestone[milestone_id] if milestone_id
+        if milestone.nil?
+          app.response.status = 404
+          return { error: 'Milestone not found' }
+        end
+
+        unless app.milestone_policy(milestone).fund_escrow?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owners or admins can fund escrow' }
+        end
+
+        result = SecureBidding::Services::Payments::FundEscrow.call(
+          milestone: milestone,
+          payment_method_id: data['payment_method_id'] || data[:payment_method_id]
+        )
+        if result[:ok]
+          app.response.status = 201
+          {
+            milestone: app.milestone_response(result[:milestone], policy: app.milestone_policy(result[:milestone])),
+            payment: app.payment_response(result[:payment], policy: app.payment_policy(result[:payment]))
+          }
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
+        end
+      end
+
+      def self.release_escrow(_req, app)
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        milestone_id = data['milestone_id'] || data[:milestone_id]
+        milestone = Milestone[milestone_id] if milestone_id
+        if milestone.nil?
+          app.response.status = 404
+          return { error: 'Milestone not found' }
+        end
+
+        unless app.milestone_policy(milestone).release_escrow?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owners or admins can release escrow' }
+        end
+
+        result = SecureBidding::Services::Payments::ReleaseEscrow.call(milestone: milestone)
+        if result[:ok]
+          {
+            milestone: app.milestone_response(result[:milestone], policy: app.milestone_policy(result[:milestone])),
+            payment: app.payment_response(result[:payment], policy: app.payment_policy(result[:payment]))
+          }
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
+        end
+      end
+
       def self.create_payment(_req, app)
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        SecureBidding::Forms::PaymentsCreateForm.new.call(data)
+        result = SecureBidding::Forms::PaymentsCreateForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
+
+        submission_id = data['bid_submission_id'] || data[:bid_submission_id]
+        submission = BidSubmission[submission_id] if submission_id
+        project = submission&.project
+        unless project && app.project_policy(project).manage?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owners or admins can create payments' }
+        end
+
         result = SecureBidding::Services::Payments::CreatePayment.call(data.transform_keys(&:to_s))
         if result[:ok]
           app.response.status = 201
@@ -68,10 +153,18 @@ module SecureBidding
           return { error: 'Payment not found' }
         end
 
+        unless app.payment_policy(payment).update?
+          app.response.status = 403
+          return { error: 'Forbidden: only project owners or admins can update payments' }
+        end
+
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
-        SecureBidding::Forms::PaymentsUpdateForm.new.call(data)
+        result = SecureBidding::Forms::PaymentsUpdateForm.new.call(data)
+        validation_error = SecureBidding::FormValidation.response_for(app, result)
+        return validation_error if validation_error
+
         result = SecureBidding::Services::Payments::UpdatePayment.call(payment: payment, payload: data.transform_keys(&:to_s))
         if result[:ok]
           app.payment_response(result[:payment], policy: app.payment_policy(result[:payment]))

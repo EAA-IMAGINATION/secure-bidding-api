@@ -41,12 +41,20 @@ describe 'API /api/v1/bid_submissions' do
   end
 
   it 'HAPPY: returns all bid submissions metadata from GET /api/v1/bid_submissions' do
-    project = SecureBidding::Project.create(title: 'list-project', budget_cents: 120_000)
+    owner = create_account(username: 'list-owner', email: 'list-owner@example.com')
+    project = SecureBidding::Project.create(
+      title: 'list-project',
+      budget_cents: 120_000,
+      state: 'published',
+      bidding_deadline: Time.now - 60
+    )
+    owner_role = SecureBidding::Role.ensure_role('project_owner')
+    SecureBidding::ProjectMembership.create(account_id: owner.id, project_id: project.id, role_id: owner_role.id)
     bid_submission = SecureBidding::BidSubmission.new(project_id: project.id, contractor_alias: 'api-key-labs')
     bid_submission.encrypt_bid('payload-1')
     bid_submission.save
 
-    get '/api/v1/bid_submissions'
+    get '/api/v1/bid_submissions', '', auth_header_for(owner)
 
     _(last_response.status).must_equal 200
     response_body = JSON.parse(last_response.body)
@@ -86,16 +94,26 @@ describe 'API /api/v1/bid_submissions' do
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'project_id, contractor_alias, and plaintext_bid are required'
+    _(response_body['error']).must_be_kind_of Hash
+    _(response_body['error']['project_id']).wont_be_nil
+    _(response_body['error']['plaintext_bid']).wont_be_nil
   end
 
   it 'HAPPY: returns bid submission metadata for an existing id' do
-    project = SecureBidding::Project.create(title: 'meta-project', budget_cents: 10_000)
+    owner = create_account(username: 'meta-owner', email: 'meta-owner@example.com')
+    project = SecureBidding::Project.create(
+      title: 'meta-project',
+      budget_cents: 10_000,
+      state: 'published',
+      bidding_deadline: Time.now - 60
+    )
+    owner_role = SecureBidding::Role.ensure_role('project_owner')
+    SecureBidding::ProjectMembership.create(account_id: owner.id, project_id: project.id, role_id: owner_role.id)
     bid_submission = SecureBidding::BidSubmission.new(project_id: project.id, contractor_alias: 'meta-user')
     bid_submission.encrypt_bid('token-123')
     bid_submission.save
 
-    get "/api/v1/bid_submissions/#{bid_submission.id}"
+    get "/api/v1/bid_submissions/#{bid_submission.id}", '', auth_header_for(owner)
 
     _(last_response.status).must_equal 200
     response_body = JSON.parse(last_response.body)
