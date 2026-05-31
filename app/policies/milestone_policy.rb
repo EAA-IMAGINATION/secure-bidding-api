@@ -3,22 +3,24 @@
 module SecureBidding
   module Policies
     class MilestonePolicy < BasePolicy
+      RESOURCE = 'milestones'
+
       def show?
-        project_policy.manage?
+        scoped_read?(RESOURCE) && project_policy.manage?
       end
 
       def fund_escrow?
-        project_policy.manage?
+        scoped_write?(RESOURCE) && project_policy.manage?
       end
 
       def release_escrow?
-        project_policy.manage?
+        scoped_write?(RESOURCE) && project_policy.manage?
       end
 
       private
 
       def project_policy
-        ProjectPolicy.new(subject, record.project)
+        ProjectPolicy.new(subject, record.project, auth_scope: auth_scope)
       end
     end
   end

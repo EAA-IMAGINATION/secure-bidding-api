@@ -3,11 +3,12 @@
 module SecureBidding
   module Policies
     class BasePolicy
-      attr_reader :subject, :record
+      attr_reader :subject, :record, :auth_scope
 
-      def initialize(subject, record)
+      def initialize(subject, record, auth_scope: nil)
         @subject = subject
         @record = record
+        @auth_scope = auth_scope || AuthScope.new
       end
 
       def summary
@@ -113,6 +114,14 @@ module SecureBidding
 
       def admin?
         subject_has_system_role?('admin') || subject_has_system_role?('system_admin')
+      end
+
+      def scoped_read?(resource)
+        @auth_scope.can_read?(resource)
+      end
+
+      def scoped_write?(resource)
+        @auth_scope.can_write?(resource)
       end
 
       def authenticated?

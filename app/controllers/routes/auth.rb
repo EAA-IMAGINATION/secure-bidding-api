@@ -17,8 +17,20 @@ module SecureBidding
           req.on 'register' do
             req.post { handle_register(req, app) }
           end
+          req.on 'verification-preview' do
+            req.post { handle_verification_preview(req, app) }
+          end
+          req.on 'registration-preview' do
+            req.post { handle_verification_preview(req, app) }
+          end
           req.on 'verify' do
             req.post { handle_verify(req, app) }
+          end
+          req.on 'verify-email' do
+            req.post { handle_verify(req, app) }
+          end
+          req.on 'sso' do
+            req.post { handle_sso(req, app) }
           end
         end
       end
@@ -38,7 +50,11 @@ module SecureBidding
           username: auth_account.username,
           system_role: auth_account.system_role
         }
-        session_token = SecureBidding::AuthToken.tokenize(session_payload, SecureBidding::AuthToken::ONE_WEEK)
+        session_token = SecureBidding::AuthToken.new(
+          session_payload,
+          SecureBidding::AuthToken::ONE_WEEK,
+          scope: SecureBidding::AuthScope.new
+        ).to_s
 
         build_auth_payload(auth_account).merge(token: session_token)
       rescue AuthenticateAccount::UnauthorizedError => e
@@ -98,13 +114,13 @@ module SecureBidding
           SecureBidding::AuthToken::ONE_HOUR
         )
 
-        verification_url = build_verification_url(app, req)
+        verification_link = build_verification_link(req, registration_token)
 
         begin
           SecureBidding::Services::Email::SendVerification.call(
             account: account,
-            registration_token: registration_token,
-            verification_url: verification_url
+            verification_link: verification_link,
+            purpose: :registration
           )
         rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
           app.class::APP_LOGGER.error("Email service error: #{e.message}")
@@ -123,53 +139,17 @@ module SecureBidding
 
       def self.handle_verify(req, app)
         data = HttpRequest.new(req).body_data
-        result = SecureBidding::Forms::VerifyForm.new.call(data)
-        unless result.success?
-          req.halt 400, { error: result.errors.to_h }.to_json
-        end
-
         registration_token = data[:registration_token].to_s.strip
-        password = data[:password].to_s.strip
-
-        begin
-          token_data = SecureBidding::AuthToken.load(registration_token)
-          payload = token_data.payload
-          username = payload[:username]
-          email = payload[:email]
-        rescue SecureBidding::ExpiredTokenError
-          return req.halt(403, { error: 'Token has expired' }.to_json)
-        rescue SecureBidding::InvalidTokenError
-          return req.halt(404, { error: 'Invalid token' }.to_json)
+        if registration_token.empty?
+          return req.halt(400, { error: 'registration_token is required' }.to_json)
         end
 
-        unless SecureBidding::Account.username_available?(username)
-          return req.halt(422, { error: 'username already taken' }.to_json)
-        end
-
-        unless SecureBidding::Account.email_available?(email)
-          return req.halt(422, { error: 'email already taken' }.to_json)
-        end
-
-        account = SecureBidding::Account.new(username: username, system_role: 'member')
-        account.set_email(email)
-        account.set_password(password)
-        account.verify_email!
-
-        session_payload = {
-          account_id: account.id,
-          username: account.username,
-          system_role: account.system_role
-        }
-        session_token = SecureBidding::AuthToken.tokenize(session_payload, SecureBidding::AuthToken::ONE_WEEK)
-
-        {
-          token: session_token,
-          account: {
-            id: account.id,
-            username: account.username,
-            email: account.email
-          }
-        }
+        SecureBidding::Services::Auth::Verification.complete(
+          registration_token,
+          password: data[:password]
+        )
+      rescue SecureBidding::Services::Auth::Verification::Error => e
+        req.halt e.status, e.body.to_json
       rescue Sequel::UniqueConstraintViolation
         req.halt 422, { error: 'Account data already exists' }.to_json
       rescue StandardError => e
@@ -177,7 +157,8 @@ module SecureBidding
         req.halt 500, { error: 'Verification failed' }.to_json
       end
 
-      def self.build_auth_payload(auth_account)
+      def self.build_auth_payload(auth_account, policy: nil)
+        policy ||= SecureBidding::Policies::AccountPolicy.new(auth_account, auth_account)
         {
           id: auth_account.id,
           username: auth_account.username,
@@ -185,14 +166,54 @@ module SecureBidding
           system_role: auth_account.system_role,
           system_roles: auth_account.system_roles.map(&:name),
           email_verified: !auth_account.email_verified_at.nil?,
-          capabilities: auth_account.capabilities
+          capabilities: auth_account.capabilities,
+          policy: policy.summary
         }
       end
 
-      def self.build_verification_url(app, req)
-        scheme = req.scheme
-        host = req.host
-        "#{scheme}://#{host}/verify-email"
+      def self.handle_sso(req, app)
+        data = HttpRequest.new(req).body_data
+        id_token = data[:id_token].to_s.strip
+        req.halt(400, { error: 'id_token is required' }.to_json) if id_token.empty?
+
+        SecureBidding::AuthenticateSso.call(id_token)
+      rescue SecureBidding::OidcVerifier::VerificationError => e
+        app.class::APP_LOGGER.warn("SSO verification failed: #{e.message}")
+        req.halt 401, { error: 'Invalid SSO credentials' }.to_json
+      rescue SecureBidding::FindOrCreateSsoAccount::EmailConflictError
+        req.halt 409, { error: 'Email already registered to another account' }.to_json
+      rescue StandardError => e
+        app.class::APP_LOGGER.error("SSO error: #{e.message}")
+        req.halt 500, { error: 'SSO authentication failed' }.to_json
+      end
+
+      def self.frontend_base_url(req)
+        frontend = ENV['FRONTEND_APP_URL'].to_s.strip
+        return frontend.chomp('/') unless frontend.empty?
+
+        app_url = ENV['APP_URL'].to_s.strip
+        return app_url.chomp('/') unless app_url.empty?
+
+        "#{req.scheme}://#{req.host}"
+      end
+
+      def self.build_verification_link(req, registration_token)
+        "#{frontend_base_url(req)}/verify-email?token=#{registration_token}"
+      end
+
+      def self.build_email_verification_link(req, registration_token)
+        build_verification_link(req, registration_token)
+      end
+
+      def self.handle_verification_preview(req, app)
+        data = HttpRequest.new(req).body_data
+        registration_token = data[:registration_token].to_s.strip
+        SecureBidding::Services::Auth::Verification.preview(registration_token)
+      rescue SecureBidding::Services::Auth::Verification::Error => e
+        req.halt e.status, e.body.to_json
+      rescue StandardError => e
+        app.class::APP_LOGGER.error("Verification preview error: #{e.message}")
+        req.halt 500, { error: 'Unable to load verification preview' }.to_json
       end
 
       def self.log_and_halt_invalid_credentials(app, req, err)

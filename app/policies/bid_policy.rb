@@ -3,18 +3,20 @@
 module SecureBidding
   module Policies
     class BidPolicy < BasePolicy
+      RESOURCE = 'bids'
+
       def index?
-        admin?
+        scoped_read?(RESOURCE) && admin?
       end
 
       def show?
-        return true if subject.nil?
+        return scoped_read?(RESOURCE) if subject.nil?
 
-        admin? || linked_project_manage? || legacy_public_bid?
+        scoped_read?(RESOURCE) && (admin? || linked_project_manage? || legacy_public_bid?)
       end
 
       def create?
-        linked_project_manage?
+        scoped_write?(RESOURCE) && linked_project_manage?
       end
 
       class Scope < BasePolicy::Scope
@@ -45,7 +47,7 @@ module SecureBidding
         project = Project[record.project_id]
         return false unless project
 
-        ProjectPolicy.new(subject, project).manage?
+        ProjectPolicy.new(subject, project, auth_scope: auth_scope).manage?
       end
 
       def legacy_public_bid?

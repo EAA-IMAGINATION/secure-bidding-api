@@ -12,7 +12,9 @@ module SecureBidding
     plugin :uuid, field: :id
     plugin :whitelist_security
     plugin :association_dependencies
-    set_allowed_columns :username, :system_role
+    set_allowed_columns :username, :system_role, :avatar
+
+    one_to_many :sso_identities, key: :account_id, class: 'SecureBidding::SsoIdentity'
 
     one_to_many :account_projects, key: :account_id, class: 'SecureBidding::AccountProject'
     one_to_many :account_roles, key: :account_id, class: 'SecureBidding::AccountRole'

@@ -129,7 +129,7 @@ describe 'API SSL/TLS Enforcement' do
       define_method_on_object(mock_routing, :env, env)
 
       http_req = SecureBidding::HttpRequest.new(mock_routing)
-      payload = http_req.authenticated_account
+      payload = http_req.authenticated_account.account
 
       _(payload[:user_id]).must_equal '123'
       _(payload[:username]).must_equal 'testuser'
@@ -145,7 +145,7 @@ describe 'API SSL/TLS Enforcement' do
       define_method_on_object(mock_routing, :env, env)
 
       http_req = SecureBidding::HttpRequest.new(mock_routing)
-      payload = http_req.authenticated_account
+      payload = http_req.authenticated_account.account
 
       _(payload[:user_id]).must_equal '123'
     end
@@ -159,7 +159,7 @@ describe 'API SSL/TLS Enforcement' do
       define_method_on_object(mock_routing, :env, env)
 
       http_req = SecureBidding::HttpRequest.new(mock_routing)
-      payload = http_req.authenticated_account
+      payload = http_req.authenticated_account.account
 
       _(payload[:user_id]).must_equal '123'
     end

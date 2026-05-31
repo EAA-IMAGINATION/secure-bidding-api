@@ -3,36 +3,38 @@
 module SecureBidding
   module Policies
     class AccountPolicy < BasePolicy
+      RESOURCE = 'accounts'
+
       def index?
-        admin?
+        scoped_read?(RESOURCE) && admin?
       end
 
       def show?
-        subject.nil? || admin? || own_record?
+        scoped_read?(RESOURCE) && (subject.nil? || admin? || own_record?)
       end
 
       def create?
-        true
+        scoped_write?(RESOURCE)
       end
 
       def update?
-        own_record?
+        scoped_write?(RESOURCE) && own_record?
       end
 
       def destroy?
-        admin? && !own_record?
+        scoped_write?(RESOURCE) && admin? && !own_record?
       end
 
       def search?
-        admin?
+        scoped_read?(RESOURCE) && admin?
       end
 
       def assign_system_role?
-        admin?
+        scoped_write?(RESOURCE) && admin?
       end
 
       def resend_verification?
-        admin? || own_record?
+        scoped_write?(RESOURCE) && (admin? || own_record?)
       end
 
       def summary

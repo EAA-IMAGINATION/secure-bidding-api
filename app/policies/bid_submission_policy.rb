@@ -3,18 +3,20 @@
 module SecureBidding
   module Policies
     class BidSubmissionPolicy < BasePolicy
+      RESOURCE = 'bid_submissions'
+
       def index?
-        authenticated?
+        scoped_read?(RESOURCE) && authenticated?
       end
 
       def show?
-        return false unless record&.project
+        return false unless scoped_read?(RESOURCE) && record&.project
 
         project_policy.manage? && bidding_closed_for?(record.project)
       end
 
       def create?
-        authenticated? && email_verified?
+        scoped_write?(RESOURCE) && authenticated? && email_verified?
       end
 
       class Scope < BasePolicy::Scope
@@ -37,7 +39,7 @@ module SecureBidding
       private
 
       def project_policy
-        ProjectPolicy.new(subject, record.project)
+        ProjectPolicy.new(subject, record.project, auth_scope: auth_scope)
       end
 
       def bidding_closed_for?(project)

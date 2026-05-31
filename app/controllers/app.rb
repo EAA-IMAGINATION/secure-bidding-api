@@ -147,27 +147,27 @@ module SecureBidding
     end
 
     def account_policy(account)
-      SecureBidding::Policies::AccountPolicy.new(auth_account, account)
+      SecureBidding::Policies::AccountPolicy.new(auth_account, account, auth_scope: auth_scope)
     end
 
     def project_policy(project)
-      SecureBidding::Policies::ProjectPolicy.new(auth_account, project)
+      SecureBidding::Policies::ProjectPolicy.new(auth_account, project, auth_scope: auth_scope)
     end
 
     def bid_submission_policy(bid_submission)
-      SecureBidding::Policies::BidSubmissionPolicy.new(auth_account, bid_submission)
+      SecureBidding::Policies::BidSubmissionPolicy.new(auth_account, bid_submission, auth_scope: auth_scope)
     end
 
     def payment_policy(payment)
-      SecureBidding::Policies::PaymentPolicy.new(auth_account, payment)
+      SecureBidding::Policies::PaymentPolicy.new(auth_account, payment, auth_scope: auth_scope)
     end
 
     def bid_policy(bid)
-      SecureBidding::Policies::BidPolicy.new(auth_account, bid)
+      SecureBidding::Policies::BidPolicy.new(auth_account, bid, auth_scope: auth_scope)
     end
 
     def milestone_policy(milestone)
-      SecureBidding::Policies::MilestonePolicy.new(auth_account, milestone)
+      SecureBidding::Policies::MilestonePolicy.new(auth_account, milestone, auth_scope: auth_scope)
     end
 
     def project_membership_response(membership)
@@ -181,6 +181,14 @@ module SecureBidding
 
     def auth_account
       @auth_account
+    end
+
+    def auth_scope
+      @auth_scope || AuthScope.new
+    end
+
+    def authorization
+      @authorization
     end
 
     # rubocop:disable Metrics/BlockLength
@@ -209,7 +217,9 @@ module SecureBidding
       # Authentication middleware - extract and validate Bearer token
       http_request = HttpRequest.new(r)
       begin
-        @auth_account = http_request.authenticated_account
+        @authorization = http_request.authenticated_account
+        @auth_account = @authorization&.account
+        @auth_scope = @authorization&.scope || AuthScope.new
       rescue InvalidTokenError
         r.halt(401, { message: 'Invalid auth token' }.to_json)
       rescue ExpiredTokenError

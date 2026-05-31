@@ -63,7 +63,8 @@ describe 'API /api/v1/auth registration endpoints' do
   end
 
   def extract_registration_token(message)
-    match = message.match(/token=([^"&\s<]+)/)
+    match = message.match(%r{register/verify/([^"&\s<]+)}) ||
+            message.match(/token=([^"&\s<]+)/)
     match && match[1]
   end
 
@@ -191,6 +192,7 @@ describe 'API /api/v1/auth registration endpoints' do
       _(response_body['account']['id']).wont_be_nil
       _(response_body['account']['username']).must_equal 'verifyuser'
       _(response_body['account']['email']).must_equal 'verify@example.com'
+      _(response_body['account']['email_verified']).must_equal true
 
       account = SecureBidding::Account[response_body['account']['id']]
       _(account.email_verified_at).wont_be_nil
@@ -210,6 +212,95 @@ describe 'API /api/v1/auth registration endpoints' do
       _(last_response.status).must_equal 404
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).wont_be_nil
+    end
+  end
+
+  describe 'POST /api/v1/auth/verification-preview' do
+    it 'returns username, email, and purpose for a registration token' do
+      token = SecureBidding::AuthToken.tokenize(
+        { username: 'preview-user', email: 'preview@example.com' },
+        SecureBidding::AuthToken::ONE_HOUR
+      )
+
+      post '/api/v1/auth/verification-preview',
+           JSON.generate({ registration_token: token }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['purpose']).must_equal 'registration'
+      _(response_body['username']).must_equal 'preview-user'
+      _(response_body['email']).must_equal 'preview@example.com'
+    end
+
+    it 'returns email_verification purpose for an existing account token' do
+      account = SecureBidding::Account.new(username: 'preview-existing', system_role: 'member')
+      account.set_email('preview-existing@example.com')
+      account.set_password('password123')
+      account.save
+      account.set_registration_token
+      account.save
+
+      post '/api/v1/auth/verification-preview',
+           JSON.generate({ registration_token: account.registration_token }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['purpose']).must_equal 'email_verification'
+      _(response_body['username']).must_equal 'preview-existing'
+      _(response_body['email']).must_equal 'preview-existing@example.com'
+    end
+  end
+
+  describe 'POST /api/v1/auth/registration-preview' do
+    it 'remains available as an alias for verification-preview' do
+      token = SecureBidding::AuthToken.tokenize(
+        { username: 'preview-user', email: 'preview@example.com' },
+        SecureBidding::AuthToken::ONE_HOUR
+      )
+
+      post '/api/v1/auth/registration-preview',
+           JSON.generate({ registration_token: token }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['purpose']).must_equal 'registration'
+      _(response_body['username']).must_equal 'preview-user'
+      _(response_body['email']).must_equal 'preview@example.com'
+    end
+  end
+
+  describe 'POST /api/v1/auth/verify-email' do
+    it 'marks an existing account as verified when the resend token is valid' do
+      account = SecureBidding::Account.new(username: 'verify-email-user', system_role: 'member')
+      account.set_email('verify-email@example.com')
+      account.set_password('password123')
+      account.save
+      account.set_registration_token
+      account.save
+
+      post '/api/v1/auth/verify-email',
+           JSON.generate({ registration_token: account.registration_token }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 200
+      response_body = JSON.parse(last_response.body)
+      _(response_body['email_verified']).must_equal true
+      _(response_body['status']).must_equal 'verified'
+
+      refreshed = SecureBidding::Account[account.id]
+      _(refreshed.email_verified_at).wont_be_nil
+      _(refreshed.registration_token).must_be_nil
+    end
+
+    it 'returns 404 for an unknown resend token' do
+      post '/api/v1/auth/verify-email',
+           JSON.generate({ registration_token: 'not-a-valid-token' }),
+           'CONTENT_TYPE' => 'application/json'
+
+      _(last_response.status).must_equal 404
     end
   end
 end

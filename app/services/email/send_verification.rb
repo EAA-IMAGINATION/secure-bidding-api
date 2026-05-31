@@ -17,14 +17,14 @@ module SecureBidding
           attr_accessor :last_payload, :last_payloads
         end
 
-        def self.call(account:, registration_token:, verification_url:)
-          new(account, registration_token, verification_url).send_verification_email
+        def self.call(account:, verification_link:, purpose: :registration)
+          new(account, verification_link, purpose).send_verification_email
         end
 
-        def initialize(account, registration_token, verification_url)
+        def initialize(account, verification_link, purpose)
           @account = account
-          @registration_token = registration_token
-          @verification_url = verification_url
+          @verification_link = verification_link
+          @purpose = purpose
         end
 
         def send_verification_email
@@ -44,7 +44,7 @@ module SecureBidding
 
         private
 
-        attr_reader :account, :registration_token, :verification_url
+        attr_reader :account, :verification_link, :purpose
 
         def build_payload
           {
@@ -57,14 +57,24 @@ module SecureBidding
                 email: account.email
               }
             ],
-            subject: 'Verify your registration',
+            subject: email_subject,
             html: build_html_template
           }
         end
 
-        def build_html_template
-          verification_link = "#{verification_url}?token=#{registration_token}"
+        def email_subject
+          purpose == :registration ? 'Verify your registration' : 'Verify your email address'
+        end
 
+        def intro_text
+          if purpose == :registration
+            'Please verify your email address to complete your registration. Open the link below to continue.'
+          else
+            'Please verify your email address. Open the link below to confirm this change.'
+          end
+        end
+
+        def build_html_template
           <<~HTML
             <!DOCTYPE html>
             <html>
@@ -72,8 +82,8 @@ module SecureBidding
                 <meta charset="UTF-8">
               </head>
               <body>
-                <h2>Welcome to Secure Bidding API, #{ERB::Util.html_escape(account.username)}!</h2>
-                <p>Please verify your email address to complete your registration. This email contains your verification link.</p>
+                <h2>Hello #{ERB::Util.html_escape(account.username)},</h2>
+                <p>#{intro_text}</p>
                 <p>
                   <a href="#{ERB::Util.html_escape(verification_link)}" style="display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 5px;">
                     Verify Email Address
@@ -82,7 +92,7 @@ module SecureBidding
                 <p>If the button above doesn't work, copy and paste this link into your browser:</p>
                 <p>#{ERB::Util.html_escape(verification_link)}</p>
                 <p>This link will expire in 1 hour.</p>
-                <p>If you didn't create this account, please ignore this email.</p>
+                <p>If you didn't request this, please ignore this email.</p>
               </body>
             </html>
           HTML
