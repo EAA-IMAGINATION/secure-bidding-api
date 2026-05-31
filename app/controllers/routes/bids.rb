@@ -2,13 +2,8 @@
 
 module SecureBidding
   module Routes
-    # Routes related to bid creation and retrieval.
-    # Extracted from the main controller to keep routing concerns separated.
+    # Routes related to legacy file-backed bid creation and retrieval.
     module Bids
-      # Entry point called by the application routing setup.
-      # Parameters:
-      # - req: the Roda request routing object
-      # - _app: the application class (unused)
       def self.call(req, app)
         req.on 'bids' do
           handle_create(req, app)
@@ -23,6 +18,8 @@ module SecureBidding
       end
 
       def self.create_bid(req, app)
+        return unauthorized_response(req) unless app.auth_account
+
         data = HttpRequest.new(req).body_data
         result = SecureBidding::Forms::BidsCreateForm.new.call(data)
         unless result.success?
@@ -31,30 +28,20 @@ module SecureBidding
         end
 
         bid = build_bid_from_data(result.to_h)
+        unless app.bid_policy(bid).create?
+          return forbidden_response(req, 'Forbidden: only project owners or admins can create legacy bids')
+        end
+
         bid.save
 
         req.response.status = 201
         { bid_id: bid.id, status: 'created' }
       end
 
-      def self.missing_encrypted_bid_response(req)
-        req.response.status = 400
-        { error: 'encrypted_bid is required and cannot be empty' }
-      end
-
-      def self.build_bid_from_data(data)
-        Bid.new(
-          contractor: data[:contractor],
-          project_id: data[:project_id],
-          encrypted_bid: data[:encrypted_bid]
-        )
-      end
-
       def self.handle_list_and_show(req, app)
         req.get do
           req.is do
-            bid_ids = SecureBidding::Policies::BidPolicy::Scope.new(app.auth_account, Bid).resolve
-            { bid_ids: bid_ids }
+            list_bids(req, app)
           end
 
           req.on String do |id|
@@ -63,7 +50,17 @@ module SecureBidding
         end
       end
 
+      def self.list_bids(req, app)
+        return unauthorized_response(req) unless app.auth_account
+        return forbidden_response(req, 'Forbidden') unless app.bid_policy(nil).index?
+
+        bid_ids = SecureBidding::Policies::BidPolicy::Scope.new(app.auth_account, Bid).resolve
+        { bid_ids: bid_ids }
+      end
+
       def self.show_for_id(req, app, id)
+        return unauthorized_response(req) unless app.auth_account
+
         bid = Bid.find(id)
         return not_found_response(req) unless bid
         return not_found_response(req) unless app.bid_policy(bid).show?
@@ -78,6 +75,24 @@ module SecureBidding
       def self.not_found_response(req)
         req.response.status = 404
         { error: 'Bid not found' }
+      end
+
+      def self.unauthorized_response(req)
+        req.response.status = 401
+        { error: 'Login required' }
+      end
+
+      def self.forbidden_response(req, message = 'Forbidden')
+        req.response.status = 403
+        { error: message }
+      end
+
+      def self.build_bid_from_data(data)
+        Bid.new(
+          contractor: data[:contractor],
+          project_id: data[:project_id],
+          encrypted_bid: data[:encrypted_bid]
+        )
       end
     end
   end

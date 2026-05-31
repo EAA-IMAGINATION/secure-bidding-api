@@ -6,21 +6,23 @@ module SecureBidding
       RESOURCE = 'bids'
 
       def index?
-        scoped_read?(RESOURCE) && admin?
+        authenticated? && scoped_read?(RESOURCE) && (admin? || manages_any_project?)
       end
 
       def show?
-        return scoped_read?(RESOURCE) if subject.nil?
+        return false unless authenticated? && scoped_read?(RESOURCE)
 
-        scoped_read?(RESOURCE) && (admin? || linked_project_manage? || legacy_public_bid?)
+        admin? || linked_project_manage?
       end
 
       def create?
-        scoped_write?(RESOURCE) && linked_project_manage?
+        authenticated? && scoped_write?(RESOURCE) && linked_project_manage?
       end
 
       class Scope < BasePolicy::Scope
         def resolve
+          return [] unless subject
+
           ids = Bid.all.filter_map do |bid_id|
             bid = Bid.find(bid_id)
             next unless bid
@@ -28,7 +30,7 @@ module SecureBidding
             bid.id
           end
 
-          return ids if admin? || subject.nil?
+          return ids if admin?
 
           account_id = subject_account_id
           return [] if account_id.nil?
@@ -43,15 +45,18 @@ module SecureBidding
 
       private
 
+      def manages_any_project?
+        account_id = subject_account_id
+        return false if account_id.nil?
+
+        ProjectPolicy.managed_project_ids_for(account_id).any?
+      end
+
       def linked_project_manage?
         project = Project[record.project_id]
         return false unless project
 
         ProjectPolicy.new(subject, project, auth_scope: auth_scope).manage?
-      end
-
-      def legacy_public_bid?
-        Project[record.project_id].nil?
       end
     end
   end

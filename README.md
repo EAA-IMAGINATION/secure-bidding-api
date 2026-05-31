@@ -135,15 +135,17 @@ Expected: list includes your `demo-freelancer` entry.
 
 ### 7. Verify bid flow
 
-Create bid:
+Legacy file-backed bids require a Bearer token, a UUID `project_id` for a project
+you manage, and base64 `encrypted_bid` payload:
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/bids \
   -H "Content-Type: application/json" \
-  -d '{"contractor":"ABC Construction","project_id":"project-123","encrypted_bid":"base64_encrypted_data_here"}'
+  -H "Authorization: Bearer SESSION_TOKEN" \
+  -d '{"contractor":"ABC Construction","project_id":"PROJECT_UUID","encrypted_bid":"YmFzZTY0X2VuY3J5cHRlZF9kYXRh"}'
 ```
 
-Project-scoped bids now require a Bearer token and only allow bidding on
+Project-scoped bid submissions require a Bearer token and only allow bidding on
 `published` projects. Project owners cannot bid on their own projects:
 
 ```bash
@@ -153,11 +155,13 @@ curl -X POST http://localhost:3000/api/v1/projects/PROJECT_ID/bids \
   -d '{"bidder_account_id":"ACCOUNT_ID","contractor_alias":"demo-bidder","plaintext_bid":"top-secret"}'
 ```
 
-Then list and fetch by id:
+Then list and fetch legacy bids (project managers / admins only):
 
 ```bash
-curl http://localhost:3000/api/v1/bids
-curl http://localhost:3000/api/v1/bids/BID_ID
+curl http://localhost:3000/api/v1/bids \
+  -H "Authorization: Bearer SESSION_TOKEN"
+curl http://localhost:3000/api/v1/bids/BID_ID \
+  -H "Authorization: Bearer SESSION_TOKEN"
 ```
 
 ### 8. Role-aware project memberships and project bids
