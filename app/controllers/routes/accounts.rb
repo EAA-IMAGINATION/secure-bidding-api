@@ -35,34 +35,39 @@ module SecureBidding
       end
 
       def self.register_accounts_member_routes(req, app)
-        req.on String do |id|
+        req.on String do |identifier|
+          req.get true do
+            if app.valid_uuid?(identifier)
+              get_account(req, app, identifier)
+            else
+              get_account_by_username(req, app, identifier)
+            end
+          end
+
+          next unless app.valid_uuid?(identifier)
+
           req.on 'system_roles' do
             req.get true do
-              get_system_roles(req, app, id)
+              get_system_roles(req, app, identifier)
             end
 
             req.post true do
-              assign_system_role(req, app, id)
-            end
-          end
-
-          req.get true do
-            get_account(req, app, id)
-          end
-
-          # POST /api/v1/accounts/:id/resend_verification
-          req.on 'resend_verification' do
-            req.post true do
-              resend_verification(req, app, id)
+              assign_system_role(req, app, identifier)
             end
           end
 
           req.patch true do
-            update_account(req, app, id)
+            update_account(req, app, identifier)
           end
 
           req.delete true do
-            delete_account(req, app, id)
+            delete_account(req, app, identifier)
+          end
+
+          req.on 'resend_verification' do
+            req.post true do
+              resend_verification(req, app, identifier)
+            end
           end
         end
       end
@@ -155,6 +160,22 @@ module SecureBidding
         end
       end
 
+      def self.get_account_by_username(_req, app, username)
+        unless app.auth_account
+          app.response.status = 401
+          return { error: 'Authentication required' }
+        end
+
+        authorized = SecureBidding::AuthorizeAccount.call(
+          auth: app.authorization,
+          username: username
+        )
+        authorized.account.merge(api_key: authorized.token)
+      rescue SecureBidding::AuthorizeAccount::ForbiddenError
+        app.response.status = 404
+        { error: 'Account not found' }
+      end
+
       def self.get_account(_req, app, id)
         unless app.valid_uuid?(id)
           app.response.status = 404
@@ -195,12 +216,13 @@ module SecureBidding
           )
           if result[:ok]
             if result[:registration_token]
-              verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
+              verification_link = SecureBidding::Routes::Auth.build_email_verification_link(_req,
+                                                                                              result[:registration_token])
               begin
                 SecureBidding::Services::Email::SendVerification.call(
                   account: result[:account],
-                  registration_token: result[:registration_token],
-                  verification_url: verification_url
+                  verification_link: verification_link,
+                  purpose: :email_verification
                 )
               rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
                 # Log the email error but do not fail the account update; verification can be retried
@@ -273,16 +295,21 @@ module SecureBidding
           app.response.status = 404
           return { error: 'Account not found' }
         elsif app.account_policy(account).resend_verification?
+          if account.email_verified_at
+            app.response.status = 422
+            return { error: 'Email is already verified' }
+          end
+
           # Generate a fresh registration token and persist it
           account.set_registration_token
           account.save
 
-          verification_url = SecureBidding::Routes::Auth.build_verification_url(app, _req)
+          verification_link = SecureBidding::Routes::Auth.build_email_verification_link(_req, account.registration_token)
           begin
             SecureBidding::Services::Email::SendVerification.call(
               account: account,
-              registration_token: account.registration_token,
-              verification_url: verification_url
+              verification_link: verification_link,
+              purpose: :email_verification
             )
           rescue SecureBidding::Services::Email::SendVerification::MailerToGoError => e
             app.class::APP_LOGGER.error("Email service error: #{e.message}")

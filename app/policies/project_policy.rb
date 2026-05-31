@@ -3,55 +3,56 @@
 module SecureBidding
   module Policies
     class ProjectPolicy < BasePolicy
+      RESOURCE = 'projects'
+
       def index?
-        authenticated?
+        scoped_read?(RESOURCE) && authenticated?
       end
 
       def show?
-        published? || admin? || (email_verified? && manage?)
+        scoped_read?(RESOURCE) && (published? || admin? || (email_verified? && manage?))
       end
 
       def create?
-        authenticated? && !admin? && email_verified?
+        scoped_write?(RESOURCE) && authenticated? && !admin? && email_verified?
       end
 
       def update?
-        email_verified? && manage?
+        scoped_write?(RESOURCE) && email_verified? && manage?
       end
 
       def destroy?
-        email_verified? && manage?
+        scoped_write?(RESOURCE) && email_verified? && manage?
       end
 
       def manage_memberships?
-        email_verified? && manage?
+        scoped_write?(RESOURCE) && email_verified? && manage?
       end
 
       def accept_ownership?
-        email_verified? && pending_owner_request?
+        scoped_write?(RESOURCE) && email_verified? && pending_owner_request?
       end
 
       def bid?
-        authenticated? && email_verified? && published? && !manage?
+        scoped_write?(RESOURCE) && authenticated? && email_verified? && published? && !manage?
       end
 
       def view_memberships?
-        email_verified? && manage?
+        scoped_read?(RESOURCE) && email_verified? && manage?
       end
 
       def view_bid_submissions?
-        return false unless authenticated?
+        return false unless scoped_read?(RESOURCE) && authenticated?
 
         email_verified? && manage? && bidding_closed?
       end
 
-      # Safe count before deadline; no bid payloads.
       def view_bid_count?
-        email_verified? && manage?
+        scoped_read?(RESOURCE) && email_verified? && manage?
       end
 
       def manage_milestones?
-        email_verified? && manage?
+        scoped_write?(RESOURCE) && email_verified? && manage?
       end
 
       # Used by other policies (payments, bid submissions).

@@ -3,20 +3,22 @@
 module SecureBidding
   module Policies
     class PaymentPolicy < BasePolicy
+      RESOURCE = 'payments'
+
       def index?
-        admin?
+        scoped_read?(RESOURCE) && admin?
       end
 
       def show?
-        linked_project_manage?
+        scoped_read?(RESOURCE) && linked_project_manage?
       end
 
       def create?
-        linked_project_manage?
+        scoped_write?(RESOURCE) && linked_project_manage?
       end
 
       def update?
-        linked_project_manage?
+        scoped_write?(RESOURCE) && linked_project_manage?
       end
 
       class Scope < BasePolicy::Scope
@@ -38,7 +40,7 @@ module SecureBidding
         submission = record.bid_submission
         return false unless submission&.project
 
-        ProjectPolicy.new(subject, submission.project).manage?
+        ProjectPolicy.new(subject, submission.project, auth_scope: auth_scope).manage?
       end
     end
   end

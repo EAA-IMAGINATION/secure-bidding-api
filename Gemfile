@@ -8,6 +8,7 @@ gem 'logger'
 
 gem 'base64'
 gem 'figaro'
+gem 'jwt', '~> 2.9'
 gem 'http', '~> 5.1'
 gem 'json'
 gem 'net-smtp'

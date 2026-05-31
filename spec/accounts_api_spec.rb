@@ -452,7 +452,7 @@ describe 'API /api/v1/accounts' do
 
     # Stub email sending to avoid SMTP in tests
     original = SecureBidding::Services::Email::SendVerification.method(:call)
-    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, registration_token:, verification_url:|
+    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, verification_link:, purpose: :registration|
       { ok: true, message: 'stubbed' }
     end
 
@@ -509,7 +509,7 @@ describe 'API /api/v1/accounts' do
     headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
 
     original = SecureBidding::Services::Email::SendVerification.method(:call)
-    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, registration_token:, verification_url:|
+    SecureBidding::Services::Email::SendVerification.define_singleton_method(:call) do |account:, verification_link:, purpose: :registration|
       raise SecureBidding::Services::Email::SendVerification::MailerToGoError, 'SMTP failed'
     end
 
@@ -522,6 +522,26 @@ describe 'API /api/v1/accounts' do
     ensure
       SecureBidding::Services::Email::SendVerification.define_singleton_method(:call, original)
     end
+  end
+
+  it 'SAD: resend_verification rejects already verified accounts' do
+    account = SecureBidding::Account.new(username: 'verified-resend', system_role: 'member')
+    account.set_password('my-secret-pass')
+    account.set_email('verified-resend@example.com')
+    account.verify_email!
+    account.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: account.id, username: account.username, system_role: account.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    post "/api/v1/accounts/#{account.id}/resend_verification", '', headers
+
+    _(last_response.status).must_equal 422
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Email is already verified'
   end
 end
 # rubocop:enable Metrics/BlockLength

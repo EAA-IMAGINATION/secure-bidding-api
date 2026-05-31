@@ -37,7 +37,7 @@ module SecureBidding
       return nil unless scheme.casecmp('bearer').zero?
 
       auth_token = AuthToken.load(token)
-      auth_token.payload
+      AuthorizedAccount.new(auth_token.payload, auth_token.scope)
     end
   end
 end

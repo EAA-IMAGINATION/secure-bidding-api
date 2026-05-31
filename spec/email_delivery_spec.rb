@@ -79,8 +79,8 @@ describe 'Mailer To Go SMTP delivery' do
       with_smtp_stub(fake_smtp) do
         result = SecureBidding::Services::Email::SendVerification.call(
           account: account,
-          registration_token: 'token-123',
-          verification_url: 'https://example.test/verify-email'
+          verification_link: 'https://example.test/verify-email?token=token-123',
+          purpose: :registration
         )
 
         _(result[:ok]).must_equal true
@@ -110,8 +110,8 @@ describe 'Mailer To Go SMTP delivery' do
       error = assert_raises(SecureBidding::Services::Email::SendVerification::MailerToGoError) do
         SecureBidding::Services::Email::SendVerification.call(
           account: account,
-          registration_token: 'token-123',
-          verification_url: 'https://example.test/verify-email'
+          verification_link: 'https://example.test/verify-email?token=token-123',
+          purpose: :registration
         )
       end
 
