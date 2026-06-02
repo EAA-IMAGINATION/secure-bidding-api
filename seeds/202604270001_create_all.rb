@@ -34,7 +34,9 @@ Sequel.seed(:development) do
       result = SecureBidding::Services::Accounts::CreateAccount.call(spec)
       raise "Account seed failed for #{spec[:username]}: #{result[:error]}" unless result[:ok]
 
-      result[:account]
+      account = result[:account]
+      account.verify_email! if account.email_verified_at.nil?
+      account
     end
 
     projects = [
@@ -62,7 +64,8 @@ Sequel.seed(:development) do
       SecureBidding::Services::Projects::AssignProjectRole.call(
         account_id: account.id,
         project_id: project.id,
-        role_name: role_name
+        role_name: role_name,
+        requested_by_admin: true
       )
     end
 
