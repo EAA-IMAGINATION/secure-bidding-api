@@ -10,7 +10,7 @@ module SecureBidding
       end
 
       def show?
-        scoped_read?(RESOURCE) && (published? || admin? || (email_verified? && manage?))
+        scoped_read?(RESOURCE) && (published? || admin? || manage?)
       end
 
       def create?

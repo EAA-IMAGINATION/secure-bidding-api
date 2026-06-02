@@ -79,10 +79,12 @@ module SecureBidding
       end
 
       def self.list_projects(_req, app)
-        projects = SecureBidding::Policies::ProjectPolicy::Scope.new(app.auth_account, Project).resolve.map do |project|
+        projects = SecureBidding::Policies::ProjectPolicy::Scope.new(app.auth_account, Project).resolve
+        visible = projects.select { |project| app.project_policy(project).show? }
+        payloads = visible.map do |project|
           app.project_response(project, policy: app.project_policy(project))
         end
-        { projects: projects }
+        { projects: payloads }
       end
 
       def self.create_project(_req, app)
@@ -330,11 +332,17 @@ module SecureBidding
         end
 
         project = Project[id]
-        if project && app.project_policy(project).show?
-          app.project_response(project, policy: app.project_policy(project))
-        else
+        if project.nil?
           app.response.status = 404
-          { error: 'Project not found' }
+          return { error: 'Project not found' }
+        end
+
+        policy = app.project_policy(project)
+        if policy.show?
+          app.project_response(project, policy: policy)
+        else
+          app.response.status = 403
+          { error: 'Forbidden: you do not have access to this project' }
         end
       end
 
