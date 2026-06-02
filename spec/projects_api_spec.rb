@@ -115,14 +115,64 @@ describe 'API /api/v1/projects' do
     _(response_body['budget_cents']).must_equal 50_000
   end
 
-  it 'SAD: returns 404 for saved project id on public project fetch' do
+  it 'SAD: returns 403 for saved project id on public project fetch' do
     project = SecureBidding::Project.create(title: 'saved-project', budget_cents: 50_000, state: 'saved')
 
     get "/api/v1/projects/#{project.id}"
 
-    _(last_response.status).must_equal 404
+    _(last_response.status).must_equal 403
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'Project not found'
+    _(response_body['error']).must_include 'Forbidden'
+  end
+
+  it 'HAPPY: project owner can fetch their saved draft' do
+    owner = create_account(username: 'draft-owner', email: 'draft-owner@example.com')
+
+    post '/api/v1/projects',
+         { title: 'my-draft', budget_cents: 40_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    get "/api/v1/projects/#{project_id}", '', auth_header_for(owner)
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['title']).must_equal 'my-draft'
+    _(response_body['state']).must_equal 'saved'
+    _(response_body['policy']['show']).must_equal true
+    _(response_body['policy']['update']).must_equal true
+  end
+
+  it 'HAPPY: unverified owner can view but not update their saved draft' do
+    owner = create_account(username: 'unverified-draft-owner', email: 'unverified-draft-owner@example.com',
+                           verified: false)
+
+    post '/api/v1/projects',
+         { title: 'blocked-create', budget_cents: 40_000 }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 403
+
+    project = SecureBidding::Project.create(title: 'legacy-unverified-draft', budget_cents: 40_000, state: 'saved')
+    role = SecureBidding::Role.ensure_role('project_owner')
+    SecureBidding::ProjectMembership.create(
+      account_id: owner.id,
+      project_id: project.id,
+      role_id: role.id
+    )
+
+    get "/api/v1/projects/#{project.id}", '', auth_header_for(owner)
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['policy']['show']).must_equal true
+    _(response_body['policy']['update']).must_equal false
+
+    patch "/api/v1/projects/#{project.id}",
+          { title: 'renamed' }.to_json,
+          auth_header_for(owner)
+
+    _(last_response.status).must_equal 403
   end
 
   it 'SAD: rejects invalid project payload' do
