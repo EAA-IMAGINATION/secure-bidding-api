@@ -28,6 +28,10 @@ module SecureBidding
       raw.empty? ? {} : JSON.parse(raw, symbolize_names: true)
     end
 
+    def signed_body_data
+      SignedRequest.parse(body_data)
+    end
+
     def authenticated_account
       header = @routing.env['HTTP_AUTHORIZATION']
       return nil if header.nil?

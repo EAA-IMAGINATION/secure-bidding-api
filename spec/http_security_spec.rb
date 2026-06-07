@@ -206,9 +206,8 @@ describe 'API SSL/TLS Enforcement' do
         system_role: 'member'
       )
 
-      post '/api/v1/auth/authenticate',
-           JSON.generate({ username: 'auth_test_user', password: 'test_password_123' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/authenticate',
+           { username: 'auth_test_user', password: 'test_password_123' }
 
       _(last_response.status).must_equal 200
     end

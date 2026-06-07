@@ -189,4 +189,18 @@ namespace :db do
   end
 end
 
+namespace :generate do
+  desc 'Create Ed25519 sign/verify keypair for signed API requests'
+  task :signing do
+    require 'rbnacl'
+    require 'base64'
+    require_relative 'app/lib/signed_request'
+
+    keypair = SecureBidding::SignedRequest.generate_keypair
+    puts "SIGNING_KEY=#{keypair[:signing_key]}"
+    puts " VERIFY_KEY=#{keypair[:verify_key]}"
+    puts "\nApp: set SIGNING_KEY. API: set VERIFY_KEY (and SIGNING_KEY in test only)."
+  end
+end
+
 task bootstrap_admin: 'db:bootstrap_admin'

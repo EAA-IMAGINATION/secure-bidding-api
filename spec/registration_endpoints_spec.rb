@@ -1,12 +1,7 @@
 # frozen_string_literal: true
 
-ENV['RACK_ENV'] = 'test'
-
-require 'json'
-require 'minitest/autorun'
+require_relative 'spec_helper'
 require 'net/smtp'
-require 'rack/test'
-require_relative '../app/require_app'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/auth registration endpoints' do
@@ -89,9 +84,8 @@ describe 'API /api/v1/auth registration endpoints' do
 
   describe 'POST /api/v1/auth/availability' do
     it 'returns available true for new username and email' do
-      post '/api/v1/auth/availability',
-           JSON.generate({ username: 'newuser', email: 'new@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/availability',
+           { username: 'newuser', email: 'new@example.com' }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -103,9 +97,8 @@ describe 'API /api/v1/auth registration endpoints' do
   describe 'POST /api/v1/auth/register' do
     it 'sends a verification email without persisting the account' do
       with_mailer_togo_env do
-        post '/api/v1/auth/register',
-             JSON.generate({ username: 'newregister', email: 'register@example.com' }),
-             'CONTENT_TYPE' => 'application/json'
+        signed_post '/api/v1/auth/register',
+           { username: 'newregister', email: 'register@example.com' }
       end
 
       _(last_response.status).must_equal 200
@@ -128,9 +121,8 @@ describe 'API /api/v1/auth registration endpoints' do
 
     it 'returns 400 for missing email' do
       with_mailer_togo_env do
-        post '/api/v1/auth/register',
-             JSON.generate({ username: 'testuser' }),
-             'CONTENT_TYPE' => 'application/json'
+        signed_post '/api/v1/auth/register',
+           { username: 'testuser' }
       end
 
       _(last_response.status).must_equal 400
@@ -147,9 +139,8 @@ describe 'API /api/v1/auth registration endpoints' do
       account.save
 
       with_mailer_togo_env do
-        post '/api/v1/auth/register',
-             JSON.generate({ username: 'newuser', email: 'taken@example.com' }),
-             'CONTENT_TYPE' => 'application/json'
+        signed_post '/api/v1/auth/register',
+           { username: 'newuser', email: 'taken@example.com' }
       end
 
       _(last_response.status).must_equal 422
@@ -160,9 +151,8 @@ describe 'API /api/v1/auth registration endpoints' do
     it 'returns 500 if the email service fails' do
       ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:@smtp.us-west-1.mailertogo.net:587?authentication=plain'
 
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'mailuser', email: 'mail@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/register',
+           { username: 'mailuser', email: 'mail@example.com' }
 
       _(last_response.status).must_equal 500
       response_body = JSON.parse(last_response.body)
@@ -175,16 +165,14 @@ describe 'API /api/v1/auth registration endpoints' do
   describe 'POST /api/v1/auth/verify' do
     it 'creates the account during verification and returns a session token' do
       with_mailer_togo_env do
-        post '/api/v1/auth/register',
-             JSON.generate({ username: 'verifyuser', email: 'verify@example.com' }),
-             'CONTENT_TYPE' => 'application/json'
+        signed_post '/api/v1/auth/register',
+           { username: 'verifyuser', email: 'verify@example.com' }
       end
 
       token = extract_registration_token(@fake_smtp.messages.first[:message])
 
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: token, password: 'chosen_password_123' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verify',
+           { registration_token: token, password: 'chosen_password_123' }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -197,17 +185,15 @@ describe 'API /api/v1/auth registration endpoints' do
       account = SecureBidding::Account[response_body['account']['id']]
       _(account.email_verified_at).wont_be_nil
 
-      post '/api/v1/auth/authenticate',
-           JSON.generate({ username: 'verifyuser', password: 'chosen_password_123' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/authenticate',
+           { username: 'verifyuser', password: 'chosen_password_123' }
 
       _(last_response.status).must_equal 200
     end
 
     it 'returns 404 for an invalid token' do
-      post '/api/v1/auth/verify',
-           JSON.generate({ registration_token: 'invalid_token_string', password: 'password123' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verify',
+           { registration_token: 'invalid_token_string', password: 'password123' }
 
       _(last_response.status).must_equal 404
       response_body = JSON.parse(last_response.body)
@@ -222,9 +208,8 @@ describe 'API /api/v1/auth registration endpoints' do
         SecureBidding::AuthToken::ONE_HOUR
       )
 
-      post '/api/v1/auth/verification-preview',
-           JSON.generate({ registration_token: token }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verification-preview',
+           { registration_token: token }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -241,9 +226,8 @@ describe 'API /api/v1/auth registration endpoints' do
       account.set_registration_token
       account.save
 
-      post '/api/v1/auth/verification-preview',
-           JSON.generate({ registration_token: account.registration_token }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verification-preview',
+           { registration_token: account.registration_token }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -260,9 +244,8 @@ describe 'API /api/v1/auth registration endpoints' do
         SecureBidding::AuthToken::ONE_HOUR
       )
 
-      post '/api/v1/auth/registration-preview',
-           JSON.generate({ registration_token: token }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/registration-preview',
+           { registration_token: token }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -281,9 +264,8 @@ describe 'API /api/v1/auth registration endpoints' do
       account.set_registration_token
       account.save
 
-      post '/api/v1/auth/verify-email',
-           JSON.generate({ registration_token: account.registration_token }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verify-email',
+           { registration_token: account.registration_token }
 
       _(last_response.status).must_equal 200
       response_body = JSON.parse(last_response.body)
@@ -296,9 +278,8 @@ describe 'API /api/v1/auth registration endpoints' do
     end
 
     it 'returns 404 for an unknown resend token' do
-      post '/api/v1/auth/verify-email',
-           JSON.generate({ registration_token: 'not-a-valid-token' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/verify-email',
+           { registration_token: 'not-a-valid-token' }
 
       _(last_response.status).must_equal 404
     end

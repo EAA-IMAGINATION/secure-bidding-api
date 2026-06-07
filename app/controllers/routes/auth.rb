@@ -6,6 +6,12 @@ module SecureBidding
     # Parses credentials, invokes the AuthenticateAccount service, and returns
     # the authenticated account payload or an appropriate error response.
     module Auth
+      def self.parse_signed_body(req)
+        HttpRequest.new(req).signed_body_data
+      rescue SignedRequest::VerificationError
+        req.halt 403, { error: 'Must sign request' }.to_json
+      end
+
       def self.call(req, app)
         req.on 'auth' do
           req.on 'authenticate' do
@@ -36,7 +42,7 @@ module SecureBidding
       end
 
       def self.handle_authenticate(req, app)
-        credentials = HttpRequest.new(req).body_data
+        credentials = parse_signed_body(req)
         form = SecureBidding::Forms::AuthenticateForm.new
         result = form.call(credentials)
         unless result.success?
@@ -64,7 +70,7 @@ module SecureBidding
       end
 
       def self.handle_availability(req, app)
-        data = HttpRequest.new(req).body_data
+        data = parse_signed_body(req)
         result = SecureBidding::Forms::AvailabilityForm.new.call(data)
         unless result.success?
           req.halt 400, { error: result.errors.to_h }.to_json
@@ -88,7 +94,7 @@ module SecureBidding
       end
 
       def self.handle_register(req, app)
-        data = HttpRequest.new(req).body_data
+        data = parse_signed_body(req)
         result = SecureBidding::Forms::RegisterForm.new.call(data)
         unless result.success?
           return req.halt(400, { error: result.errors.to_h }.to_json)
@@ -138,7 +144,7 @@ module SecureBidding
       end
 
       def self.handle_verify(req, app)
-        data = HttpRequest.new(req).body_data
+        data = parse_signed_body(req)
         registration_token = data[:registration_token].to_s.strip
         if registration_token.empty?
           return req.halt(400, { error: 'registration_token is required' }.to_json)
@@ -172,7 +178,7 @@ module SecureBidding
       end
 
       def self.handle_sso(req, app)
-        data = HttpRequest.new(req).body_data
+        data = parse_signed_body(req)
         id_token = data[:id_token].to_s.strip
         req.halt(400, { error: 'id_token is required' }.to_json) if id_token.empty?
 
@@ -206,7 +212,7 @@ module SecureBidding
       end
 
       def self.handle_verification_preview(req, app)
-        data = HttpRequest.new(req).body_data
+        data = parse_signed_body(req)
         registration_token = data[:registration_token].to_s.strip
         SecureBidding::Services::Auth::Verification.preview(registration_token)
       rescue SecureBidding::Services::Auth::Verification::Error => e

@@ -83,9 +83,8 @@ describe 'Mailer To Go SMTP integration' do
 
   it 'sends a verification email through SMTP' do
     with_mailer_togo_env do
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'emailtest1', email: 'emailtest1@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/register',
+           { username: 'emailtest1', email: 'emailtest1@example.com' }
     end
 
     _(last_response.status).must_equal 200
@@ -97,9 +96,8 @@ describe 'Mailer To Go SMTP integration' do
 
   it 'renders the verification token in the email body' do
     with_mailer_togo_env do
-      post '/api/v1/auth/register',
-           JSON.generate({ username: 'tokentest', email: 'tokentest@example.com' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/register',
+           { username: 'tokentest', email: 'tokentest@example.com' }
     end
 
     payload = @fake_smtp.messages.first[:message]

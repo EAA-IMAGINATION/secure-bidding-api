@@ -50,6 +50,7 @@ require_relative 'lib/auth_scope'
 require_relative 'lib/oidc_verifier'
 require_relative 'lib/google_id_token'
 require_relative 'lib/auth_token'
+require_relative 'lib/signed_request'
 require_relative 'lib/form_validation'
 
 require_relative 'forms/base_form'
@@ -76,5 +77,20 @@ if auth_token_key.empty?
   auth_token_key = SecureBidding::AuthToken.generate_key
 end
 SecureBidding::AuthToken.setup(auth_token_key)
+
+SecureBidding::Environment.load_secrets!
+
+verify_key = ENV['VERIFY_KEY'].to_s
+signing_key = ENV['SIGNING_KEY'].to_s
+if verify_key.empty?
+  if SecureBidding::Environment.app_env == 'production'
+    raise KeyError, 'VERIFY_KEY must be configured in production'
+  end
+
+  # Shared dev/test keypair — must match SIGNING_KEY in the web app secrets.
+  verify_key = 'lH5S8eMKRq0QayFsiVomn8DKE1xTTOgdzoiMzjtES+c='
+  signing_key = 'Q1QC/DUM0/UOmjYimkowLRDCkd+cvWXCeRfjOuUB8No=' if signing_key.empty?
+end
+SecureBidding::SignedRequest.setup(verify_key, signing_key.empty? ? nil : signing_key)
 
 require_relative 'controllers/app'

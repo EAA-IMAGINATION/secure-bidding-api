@@ -34,7 +34,7 @@ describe 'API /api/v1/accounts' do
       system_role: 'member'
     }
 
-    post '/api/v1/accounts', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    signed_post '/api/v1/accounts', payload
 
     _(last_response.status).must_equal 201
     response_body = JSON.parse(last_response.body)
@@ -110,9 +110,8 @@ describe 'API /api/v1/accounts' do
   end
 
   it 'SAD: rejects account creation with missing required fields' do
-    post '/api/v1/accounts',
-         { username: 'missing-password' }.to_json,
-         { 'CONTENT_TYPE' => 'application/json' }
+    signed_post '/api/v1/accounts',
+                { username: 'missing-password' }
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -129,7 +128,7 @@ describe 'API /api/v1/accounts' do
       system_role: 'super-admin'
     }
 
-    post '/api/v1/accounts', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    signed_post '/api/v1/accounts', payload
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
@@ -283,7 +282,7 @@ describe 'API /api/v1/accounts' do
       system_role: 'member'
     }
 
-    post '/api/v1/accounts', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
+    signed_post '/api/v1/accounts', payload
 
     _(last_response.status).must_equal 400
     response_body = JSON.parse(last_response.body)
