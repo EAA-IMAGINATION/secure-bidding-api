@@ -84,9 +84,12 @@ module SecureBidding
         { accounts: accounts }
       end
 
-      def self.create_account(_req, app)
-        data = app.parse_json_request_body
-        return data if app.response.status == 400
+      def self.create_account(req, app)
+        begin
+          data = HttpRequest.new(req).signed_body_data
+        rescue SignedRequest::VerificationError
+          return req.halt(403, { error: 'Must sign request' }.to_json)
+        end
 
         result = SecureBidding::Forms::AccountsCreateForm.new.call(data)
         validation_error = SecureBidding::FormValidation.response_for(app, result)

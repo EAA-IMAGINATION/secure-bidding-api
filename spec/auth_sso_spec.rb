@@ -37,9 +37,8 @@ describe 'API /api/v1/auth/sso' do
     original = SecureBidding::GoogleIdToken.method(:verify)
     SecureBidding::GoogleIdToken.define_singleton_method(:verify) { |_token| claims }
     begin
-      post '/api/v1/auth/sso',
-           JSON.generate({ id_token: 'fake.id.token' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/sso',
+           { id_token: 'fake.id.token' }
 
       _(last_response.status).must_equal 200
       body = JSON.parse(last_response.body)
@@ -58,9 +57,8 @@ describe 'API /api/v1/auth/sso' do
       raise SecureBidding::OidcVerifier::VerificationError, 'bad token'
     end
     begin
-      post '/api/v1/auth/sso',
-           JSON.generate({ id_token: 'bad' }),
-           'CONTENT_TYPE' => 'application/json'
+      signed_post '/api/v1/auth/sso',
+           { id_token: 'bad' }
 
       _(last_response.status).must_equal 401
     ensure
