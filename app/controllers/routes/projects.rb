@@ -48,6 +48,12 @@ module SecureBidding
             end
           end
 
+          req.on 'integrity_snapshot' do
+            req.get true do
+              get_project_integrity_snapshot(req, app, id)
+            end
+          end
+
           req.on 'milestones' do
             req.get true do
               list_project_milestones(req, app, id)
@@ -386,6 +392,41 @@ module SecureBidding
           app.response.status = 404
           { error: 'Project not found' }
         end
+      end
+
+      def self.get_project_integrity_snapshot(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        project = Project[id]
+        if project.nil?
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        unless SecureBidding::Policies::ProjectPolicy.bidding_closed_for?(project)
+          app.response.status = 404
+          return { error: 'Integrity snapshot not yet available' }
+        end
+
+        snapshot = SecureBidding::IntegritySnapshot.where(project_id: project.id).first
+        if snapshot.nil?
+          SecureBidding::Services::Projects::GenerateIntegritySnapshot.call(project)
+          snapshot = SecureBidding::IntegritySnapshot.where(project_id: project.id).first
+        end
+
+        if snapshot.nil?
+          app.response.status = 404
+          return { error: 'Integrity snapshot not yet available' }
+        end
+
+        {
+          project_id: project.id,
+          canonical_hash: snapshot.canonical_hash,
+          snapshot_taken_at: snapshot.snapshot_taken_at.iso8601
+        }
       end
 
       def self.list_project_milestones(_req, app, id)
