@@ -87,6 +87,44 @@ describe 'API /api/v1/projects' do
     _(body['bid_count']).must_equal 1
   end
 
+  it 'HAPPY: returns integrity snapshot after bidding deadline' do
+    owner = create_account(username: 'snap-owner', email: 'snap-owner@example.com')
+    bidder = create_account(username: 'snap-bidder', email: 'snap-bidder@example.com')
+
+    post '/api/v1/projects',
+         { title: 'snap-project', budget_cents: 50_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post '/api/v1/bid_submissions',
+         { project_id: project_id, contractor_alias: 'snap-bidder' }.merge(sample_client_bid_payload('secret')).to_json,
+         auth_header_for(bidder)
+    _(last_response.status).must_equal 201
+
+    SecureBidding::Project[project_id].update(bidding_deadline: Time.now - 60)
+
+    get "/api/v1/projects/#{project_id}/integrity_snapshot"
+    _(last_response.status).must_equal 200
+    body = JSON.parse(last_response.body)
+    _(body['project_id']).must_equal project_id
+    _(body['canonical_hash']).wont_be_nil
+    _(body['snapshot_taken_at']).wont_be_nil
+  end
+
+  it 'SAD: returns 404 for integrity snapshot before bidding deadline' do
+    project = SecureBidding::Project.create(
+      title: 'pre-snap',
+      budget_cents: 40_000,
+      state: 'published',
+      bidding_deadline: Time.now + 3600
+    )
+
+    get "/api/v1/projects/#{project.id}/integrity_snapshot"
+    _(last_response.status).must_equal 404
+    body = JSON.parse(last_response.body)
+    _(body['error']).must_include 'not yet available'
+  end
+
   it 'HAPPY: lists only published projects with GET /api/v1/projects' do
     SecureBidding::Project.create(title: 'p1', budget_cents: 10_000, state: 'saved')
     SecureBidding::Project.create(title: 'p2', budget_cents: 20_000, state: 'published')
