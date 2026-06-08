@@ -2,6 +2,7 @@
 
 require_relative 'spec_helper'
 require 'net/smtp'
+require 'uri'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/auth registration endpoints' do
@@ -60,7 +61,9 @@ describe 'API /api/v1/auth registration endpoints' do
   def extract_registration_token(message)
     match = message.match(%r{register/verify/([^"&\s<]+)}) ||
             message.match(/token=([^"&\s<]+)/)
-    match && match[1]
+    return nil unless match
+
+    URI.decode_www_form_component(match[1])
   end
 
   before do
@@ -117,6 +120,31 @@ describe 'API /api/v1/auth registration endpoints' do
       token_payload = SecureBidding::AuthToken.load(token).payload
       _(token_payload[:username]).must_equal 'newregister'
       _(token_payload[:email]).must_equal 'register@example.com'
+    end
+
+    it 'URL-encodes verification links so base64 plus signs survive email clicks' do
+      with_mailer_togo_env do
+        signed_post '/api/v1/auth/register',
+           { username: 'plususer', email: 'plus@example.com' }
+      end
+
+      _(last_response.status).must_equal 200
+      message = @fake_smtp.messages.first[:message]
+      token = extract_registration_token(message)
+      _(token).wont_be_nil
+
+      href = message[/href="([^"]+)"/, 1]
+      query_token = href.split('token=', 2).last
+      _(query_token).wont_include '+'
+      decoded = URI.decode_www_form_component(query_token)
+      _(decoded).must_equal token
+
+      signed_post '/api/v1/auth/verification-preview',
+                  { registration_token: decoded }
+      _(last_response.status).must_equal 200
+      preview = JSON.parse(last_response.body)
+      _(preview['username']).must_equal 'plususer'
+      _(preview['email']).must_equal 'plus@example.com'
     end
 
     it 'returns 400 for missing email' do

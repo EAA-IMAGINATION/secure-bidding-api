@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'uri'
+
 module SecureBidding
   module Routes
     # Handles authentication endpoints under /auth.
@@ -204,7 +206,12 @@ module SecureBidding
       end
 
       def self.build_verification_link(req, registration_token)
-        "#{frontend_base_url(req)}/verify-email?token=#{registration_token}"
+        encoded_token = encode_verification_token(registration_token)
+        "#{frontend_base_url(req)}/verify-email?token=#{encoded_token}"
+      end
+
+      def self.encode_verification_token(registration_token)
+        URI.encode_www_form_component(registration_token.to_s)
       end
 
       def self.build_email_verification_link(req, registration_token)
