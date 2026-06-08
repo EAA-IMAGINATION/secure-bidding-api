@@ -225,7 +225,7 @@ describe 'API /api/v1/auth registration endpoints' do
     it 'returns username, email, and purpose for a registration token' do
       token = SecureBidding::AuthToken.tokenize(
         { username: 'preview-user', email: 'preview@example.com' },
-        SecureBidding::AuthToken::ONE_HOUR
+        SecureBidding::AuthToken::VERIFICATION_LINK_TTL
       )
 
       signed_post '/api/v1/auth/verification-preview',
@@ -261,7 +261,7 @@ describe 'API /api/v1/auth registration endpoints' do
     it 'remains available as an alias for verification-preview' do
       token = SecureBidding::AuthToken.tokenize(
         { username: 'preview-user', email: 'preview@example.com' },
-        SecureBidding::AuthToken::ONE_HOUR
+        SecureBidding::AuthToken::VERIFICATION_LINK_TTL
       )
 
       signed_post '/api/v1/auth/registration-preview',

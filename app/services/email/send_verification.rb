@@ -74,6 +74,15 @@ module SecureBidding
           end
         end
 
+        def link_expires_in_text
+          ttl = SecureBidding::AuthToken::VERIFICATION_LINK_TTL
+          return '24 hours' if ttl == SecureBidding::AuthToken::ONE_DAY
+          return '1 hour' if ttl == SecureBidding::AuthToken::ONE_HOUR
+
+          hours = ttl / SecureBidding::AuthToken::ONE_HOUR
+          hours == 1 ? '1 hour' : "#{hours} hours"
+        end
+
         def build_html_template
           <<~HTML
             <!DOCTYPE html>
@@ -91,7 +100,7 @@ module SecureBidding
                 </p>
                 <p>If the button above doesn't work, copy and paste this link into your browser:</p>
                 <p>#{ERB::Util.html_escape(verification_link)}</p>
-                <p>This link will expire in 1 hour.</p>
+                <p>This link will expire in #{ERB::Util.html_escape(link_expires_in_text)}.</p>
                 <p>If you didn't request this, please ignore this email.</p>
               </body>
             </html>

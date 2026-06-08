@@ -14,6 +14,8 @@ module SecureBidding
   class AuthToken
     ONE_HOUR = 3600
     ONE_DAY = 86_400
+    # Email verification links (registration, change-email, resend)
+    VERIFICATION_LINK_TTL = ONE_DAY
     ONE_WEEK = 604_800
     ONE_MONTH = 2_592_000
     ONE_YEAR = 31_536_000

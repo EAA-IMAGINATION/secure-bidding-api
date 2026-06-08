@@ -109,7 +109,7 @@ module SecureBidding
       raise e
     end
 
-    def set_registration_token(expiration = SecureBidding::AuthToken::ONE_HOUR)
+    def set_registration_token(expiration = SecureBidding::AuthToken::VERIFICATION_LINK_TTL)
       token = SecureBidding::AuthToken.new(
         { account_id: id },
         expiration

@@ -117,7 +117,7 @@ module SecureBidding
         account.set_email(email)
         registration_token = SecureBidding::AuthToken.tokenize(
           { username: username, email: email },
-          SecureBidding::AuthToken::ONE_HOUR
+          SecureBidding::AuthToken::VERIFICATION_LINK_TTL
         )
 
         verification_link = build_verification_link(req, registration_token)
