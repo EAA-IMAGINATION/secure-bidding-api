@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'uri'
+
 module SecureBidding
   module Routes
     # Handles authentication endpoints under /auth.
@@ -117,7 +119,7 @@ module SecureBidding
         account.set_email(email)
         registration_token = SecureBidding::AuthToken.tokenize(
           { username: username, email: email },
-          SecureBidding::AuthToken::ONE_HOUR
+          SecureBidding::AuthToken::VERIFICATION_LINK_TTL
         )
 
         verification_link = build_verification_link(req, registration_token)
@@ -194,17 +196,22 @@ module SecureBidding
       end
 
       def self.frontend_base_url(req)
-        frontend = ENV['FRONTEND_APP_URL'].to_s.strip
+        frontend = SecureBidding::Environment.env_value('FRONTEND_APP_URL', 'frontend_app_url').to_s.strip
         return frontend.chomp('/') unless frontend.empty?
 
-        app_url = ENV['APP_URL'].to_s.strip
+        app_url = SecureBidding::Environment.env_value('APP_URL', 'app_url').to_s.strip
         return app_url.chomp('/') unless app_url.empty?
 
         "#{req.scheme}://#{req.host}"
       end
 
       def self.build_verification_link(req, registration_token)
-        "#{frontend_base_url(req)}/verify-email?token=#{registration_token}"
+        encoded_token = encode_verification_token(registration_token)
+        "#{frontend_base_url(req)}/verify-email?token=#{encoded_token}"
+      end
+
+      def self.encode_verification_token(registration_token)
+        URI.encode_www_form_component(registration_token.to_s)
       end
 
       def self.build_email_verification_link(req, registration_token)

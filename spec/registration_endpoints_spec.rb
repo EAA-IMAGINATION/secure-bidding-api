@@ -2,6 +2,7 @@
 
 require_relative 'spec_helper'
 require 'net/smtp'
+require 'uri'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/auth registration endpoints' do
@@ -60,7 +61,9 @@ describe 'API /api/v1/auth registration endpoints' do
   def extract_registration_token(message)
     match = message.match(%r{register/verify/([^"&\s<]+)}) ||
             message.match(/token=([^"&\s<]+)/)
-    match && match[1]
+    return nil unless match
+
+    URI.decode_www_form_component(match[1])
   end
 
   before do
@@ -119,6 +122,31 @@ describe 'API /api/v1/auth registration endpoints' do
       _(token_payload[:email]).must_equal 'register@example.com'
     end
 
+    it 'URL-encodes verification links so base64 plus signs survive email clicks' do
+      with_mailer_togo_env do
+        signed_post '/api/v1/auth/register',
+           { username: 'plususer', email: 'plus@example.com' }
+      end
+
+      _(last_response.status).must_equal 200
+      message = @fake_smtp.messages.first[:message]
+      token = extract_registration_token(message)
+      _(token).wont_be_nil
+
+      href = message[/href="([^"]+)"/, 1]
+      query_token = href.split('token=', 2).last
+      _(query_token).wont_include '+'
+      decoded = URI.decode_www_form_component(query_token)
+      _(decoded).must_equal token
+
+      signed_post '/api/v1/auth/verification-preview',
+                  { registration_token: decoded }
+      _(last_response.status).must_equal 200
+      preview = JSON.parse(last_response.body)
+      _(preview['username']).must_equal 'plususer'
+      _(preview['email']).must_equal 'plus@example.com'
+    end
+
     it 'returns 400 for missing email' do
       with_mailer_togo_env do
         signed_post '/api/v1/auth/register',
@@ -149,7 +177,17 @@ describe 'API /api/v1/auth registration endpoints' do
     end
 
     it 'returns 500 if the email service fails' do
-      ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:@smtp.us-west-1.mailertogo.net:587?authentication=plain'
+      original_url = ENV['MAILERTOGO_URL']
+      original_password = ENV['MAILERTOGO_SMTP_PASSWORD']
+      original_password_lower = ENV['mailertogo_smtp_password']
+
+      ENV['MAILERTOGO_URL'] = nil
+      ENV.delete('mailertogo_url')
+      ENV['MAILERTOGO_SMTP_HOST'] = 'smtp.us-west-1.mailertogo.net'
+      ENV['MAILERTOGO_SMTP_PORT'] = '587'
+      ENV['MAILERTOGO_SMTP_USER'] = 'mailertogo-user'
+      ENV['MAILERTOGO_SMTP_PASSWORD'] = ''
+      ENV.delete('mailertogo_smtp_password')
 
       signed_post '/api/v1/auth/register',
            { username: 'mailuser', email: 'mail@example.com' }
@@ -158,7 +196,17 @@ describe 'API /api/v1/auth registration endpoints' do
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_include 'email'
     ensure
-      ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:mailertogo-password@smtp.us-west-1.mailertogo.net:587?authentication=plain'
+      ENV['MAILERTOGO_URL'] = original_url
+      if original_password.nil?
+        ENV.delete('MAILERTOGO_SMTP_PASSWORD')
+      else
+        ENV['MAILERTOGO_SMTP_PASSWORD'] = original_password
+      end
+      if original_password_lower.nil?
+        ENV.delete('mailertogo_smtp_password')
+      else
+        ENV['mailertogo_smtp_password'] = original_password_lower
+      end
     end
   end
 
@@ -205,7 +253,7 @@ describe 'API /api/v1/auth registration endpoints' do
     it 'returns username, email, and purpose for a registration token' do
       token = SecureBidding::AuthToken.tokenize(
         { username: 'preview-user', email: 'preview@example.com' },
-        SecureBidding::AuthToken::ONE_HOUR
+        SecureBidding::AuthToken::VERIFICATION_LINK_TTL
       )
 
       signed_post '/api/v1/auth/verification-preview',
@@ -241,7 +289,7 @@ describe 'API /api/v1/auth registration endpoints' do
     it 'remains available as an alias for verification-preview' do
       token = SecureBidding::AuthToken.tokenize(
         { username: 'preview-user', email: 'preview@example.com' },
-        SecureBidding::AuthToken::ONE_HOUR
+        SecureBidding::AuthToken::VERIFICATION_LINK_TTL
       )
 
       signed_post '/api/v1/auth/registration-preview',

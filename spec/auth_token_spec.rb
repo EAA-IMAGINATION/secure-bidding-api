@@ -383,18 +383,18 @@ describe 'SecureBidding::AuthToken' do
     end
   end
 
-  describe 'Registration token use case (1 hour expiration)' do
-    it 'creates registration token with ONE_HOUR expiration' do
+  describe 'Registration token use case (24 hour expiration)' do
+    it 'creates registration token with VERIFICATION_LINK_TTL expiration' do
       registration_payload = {
         email: 'newuser@example.com',
         registration_code: 'code123'
       }
-      
+
       token = SecureBidding::AuthToken.new(
         registration_payload,
-        SecureBidding::AuthToken::ONE_HOUR
+        SecureBidding::AuthToken::VERIFICATION_LINK_TTL
       )
-      
+
       _(token.fresh?).must_equal true
       _(token.payload).must_equal registration_payload
     end

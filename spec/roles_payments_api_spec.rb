@@ -30,6 +30,14 @@ describe 'API role and payment placeholders' do
     { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
   end
 
+  def assign_capability_role(account, role_name)
+    result = SecureBidding::Services::Roles::AssignSystemRole.call(
+      account_id: account.id,
+      role_name: role_name
+    )
+    _(result[:ok]).must_equal true
+  end
+
   before do
     SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
     SecureBidding::Database.migrate!
@@ -50,14 +58,21 @@ describe 'API role and payment placeholders' do
     @admin.save
   end
 
-  it 'HAPPY: assigns and lists system roles for an account' do
+  it 'SAD: rejects capability roles via system_roles endpoint' do
     account = create_account(username: 'role-user', email: 'role-user@example.com')
 
     post "/api/v1/accounts/#{account.id}/system_roles",
          { role: 'system_admin' }.to_json,
          auth_header_for(@admin)
 
-    _(last_response.status).must_equal 201
+    _(last_response.status).must_equal 400
+    body = JSON.parse(last_response.body)
+    _(body['error']).must_include 'admin or member'
+  end
+
+  it 'HAPPY: lists assigned capability roles for an account' do
+    account = create_account(username: 'role-user', email: 'role-user@example.com')
+    assign_capability_role(account, 'system_admin')
 
     get "/api/v1/accounts/#{account.id}/system_roles"
     _(last_response.status).must_equal 200
@@ -68,10 +83,7 @@ describe 'API role and payment placeholders' do
   it 'HAPPY: creates project requirement with a project_owner account' do
     owner = create_account(username: 'owner-user', email: 'owner-user@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
@@ -94,10 +106,7 @@ describe 'API role and payment placeholders' do
     owner = create_account(username: 'owner-two', email: 'owner-two@example.com')
     bidder = create_account(username: 'bidder-one', email: 'bidder-one@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
@@ -125,10 +134,7 @@ describe 'API role and payment placeholders' do
     owner = create_account(username: 'owner-three', email: 'owner-three@example.com')
     outsider = create_account(username: 'outsider', email: 'outsider@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
@@ -154,10 +160,7 @@ describe 'API role and payment placeholders' do
   it 'SAD: rejects project owner bidding on own published project' do
     owner = create_account(username: 'owner-self-bid', email: 'owner-self-bid@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
@@ -185,10 +188,7 @@ describe 'API role and payment placeholders' do
     owner = create_account(username: 'owner-four', email: 'owner-four@example.com')
     bidder = create_account(username: 'bidder-two', email: 'bidder-two@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
@@ -249,10 +249,7 @@ describe 'API role and payment placeholders' do
   it 'SAD: rejects a non-UUID account_id when assigning a project role' do
     owner = create_account(username: 'uuid-owner', email: 'uuid-owner@example.com')
 
-    post "/api/v1/accounts/#{owner.id}/system_roles",
-         { role: 'project_owner' }.to_json,
-         auth_header_for(@admin)
-    _(last_response.status).must_equal 201
+    assign_capability_role(owner, 'project_owner')
 
     post '/api/v1/projects',
          {
