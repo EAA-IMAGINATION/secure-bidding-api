@@ -40,5 +40,16 @@ module SecureBidding
 
       File.expand_path('example-secrets.yml', __dir__)
     end
+
+    def env_value(*keys, default: nil)
+      load_secrets!
+      keys.flatten.each do |key|
+        [key, key.to_s.upcase, key.to_s.downcase].map(&:to_s).uniq.each do |name|
+          val = ENV[name]
+          return val if val && !val.to_s.strip.empty?
+        end
+      end
+      default
+    end
   end
 end

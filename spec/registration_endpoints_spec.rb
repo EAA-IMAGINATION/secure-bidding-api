@@ -149,7 +149,17 @@ describe 'API /api/v1/auth registration endpoints' do
     end
 
     it 'returns 500 if the email service fails' do
-      ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:@smtp.us-west-1.mailertogo.net:587?authentication=plain'
+      original_url = ENV['MAILERTOGO_URL']
+      original_password = ENV['MAILERTOGO_SMTP_PASSWORD']
+      original_password_lower = ENV['mailertogo_smtp_password']
+
+      ENV['MAILERTOGO_URL'] = nil
+      ENV.delete('mailertogo_url')
+      ENV['MAILERTOGO_SMTP_HOST'] = 'smtp.us-west-1.mailertogo.net'
+      ENV['MAILERTOGO_SMTP_PORT'] = '587'
+      ENV['MAILERTOGO_SMTP_USER'] = 'mailertogo-user'
+      ENV['MAILERTOGO_SMTP_PASSWORD'] = ''
+      ENV.delete('mailertogo_smtp_password')
 
       signed_post '/api/v1/auth/register',
            { username: 'mailuser', email: 'mail@example.com' }
@@ -158,7 +168,17 @@ describe 'API /api/v1/auth registration endpoints' do
       response_body = JSON.parse(last_response.body)
       _(response_body['error']).must_include 'email'
     ensure
-      ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:mailertogo-password@smtp.us-west-1.mailertogo.net:587?authentication=plain'
+      ENV['MAILERTOGO_URL'] = original_url
+      if original_password.nil?
+        ENV.delete('MAILERTOGO_SMTP_PASSWORD')
+      else
+        ENV['MAILERTOGO_SMTP_PASSWORD'] = original_password
+      end
+      if original_password_lower.nil?
+        ENV.delete('mailertogo_smtp_password')
+      else
+        ENV['mailertogo_smtp_password'] = original_password_lower
+      end
     end
   end
 

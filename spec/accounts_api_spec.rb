@@ -25,7 +25,7 @@ describe 'API /api/v1/accounts' do
     SecureBidding::Account.dataset.delete
   end
 
-  it 'HAPPY: creates an account with POST /api/v1/accounts' do
+  it 'SAD: rejects direct account creation with POST /api/v1/accounts' do
     payload = {
       username: 'route-alice',
       password: 'my-secret-pass',
@@ -36,14 +36,9 @@ describe 'API /api/v1/accounts' do
 
     signed_post '/api/v1/accounts', payload
 
-    _(last_response.status).must_equal 201
+    _(last_response.status).must_equal 405
     response_body = JSON.parse(last_response.body)
-    _(response_body['id']).wont_be_nil
-    _(response_body['status']).must_equal 'created'
-
-    stored = SecureBidding::Account[response_body['id']]
-    _(stored).wont_be_nil
-    _(stored.password_hash).wont_equal payload[:password]
+    _(response_body['error']).must_include 'auth/register'
   end
 
   it 'HAPPY: gets account metadata with GET /api/v1/accounts/:id' do
@@ -113,11 +108,7 @@ describe 'API /api/v1/accounts' do
     signed_post '/api/v1/accounts',
                 { username: 'missing-password' }
 
-    _(last_response.status).must_equal 400
-    response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_be_kind_of Hash
-    _(response_body['error']['password']).wont_be_nil
-    _(response_body['error']['email']).wont_be_nil
+    _(last_response.status).must_equal 405
   end
 
   it 'SAD: rejects account creation with invalid system_role' do
@@ -130,9 +121,7 @@ describe 'API /api/v1/accounts' do
 
     signed_post '/api/v1/accounts', payload
 
-    _(last_response.status).must_equal 400
-    response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'system_role must be admin or member'
+    _(last_response.status).must_equal 405
   end
 
   it 'SAD: returns 404 for missing account id' do
@@ -284,9 +273,7 @@ describe 'API /api/v1/accounts' do
 
     signed_post '/api/v1/accounts', payload
 
-    _(last_response.status).must_equal 400
-    response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'Invalid account attributes'
+    _(last_response.status).must_equal 405
   end
 
   it 'HAPPY: admin can delete an account with DELETE /api/v1/accounts/:id' do
@@ -407,6 +394,32 @@ describe 'API /api/v1/accounts' do
          headers
 
     _(last_response.status).must_equal 403
+  end
+
+  it 'SAD: rejects capability roles via system_roles endpoint' do
+    admin = SecureBidding::Account.new(username: 'cap-admin', system_role: 'admin')
+    admin.set_password('my-secret-pass')
+    admin.set_email('cap-admin@example.com')
+    admin.save
+
+    target = SecureBidding::Account.new(username: 'cap-target', system_role: 'member')
+    target.set_password('my-secret-pass')
+    target.set_email('cap-target@example.com')
+    target.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: admin.id, username: admin.username, system_role: admin.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    post "/api/v1/accounts/#{target.id}/system_roles",
+         { role: 'project_owner' }.to_json,
+         headers
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_include 'admin or member'
   end
 
   it 'HAPPY: admin can promote a member to admin with system_roles endpoint' do
@@ -541,6 +554,15 @@ describe 'API /api/v1/accounts' do
     _(last_response.status).must_equal 422
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_equal 'Email is already verified'
+  end
+
+  it 'SAD: does not expose admin user creation routes' do
+    get '/api/v1/admin/users/new'
+    _(last_response.status).must_equal 404
+
+    post '/api/v1/admin/users', { username: 'someone', email: 'someone@example.com' }.to_json,
+         'CONTENT_TYPE' => 'application/json'
+    _(last_response.status).must_equal 404
   end
 end
 # rubocop:enable Metrics/BlockLength

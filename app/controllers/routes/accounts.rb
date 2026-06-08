@@ -22,7 +22,7 @@ module SecureBidding
         end
 
         req.post true do
-          create_account(req, app)
+          reject_direct_account_creation(req)
         end
       end
 
@@ -84,25 +84,13 @@ module SecureBidding
         { accounts: accounts }
       end
 
-      def self.create_account(req, app)
-        begin
-          data = HttpRequest.new(req).signed_body_data
-        rescue SignedRequest::VerificationError
-          return req.halt(403, { error: 'Must sign request' }.to_json)
-        end
+      ADMIN_ASSIGNABLE_ACCOUNT_ROLES = %w[admin member].freeze
 
-        result = SecureBidding::Forms::AccountsCreateForm.new.call(data)
-        validation_error = SecureBidding::FormValidation.response_for(app, result)
-        return validation_error if validation_error
-
-        result = SecureBidding::Services::Accounts::CreateAccount.call(data)
-        if result[:ok]
-          app.response.status = 201
-          { id: result[:account].id, status: 'created' }
-        else
-          app.response.status = result[:status]
-          { error: result[:error] }
-        end
+      def self.reject_direct_account_creation(req)
+        req.halt(
+          405,
+          { error: 'Use POST /api/v1/auth/register and complete email verification instead' }.to_json
+        )
       end
 
       def self.search_accounts(req, app)
@@ -149,6 +137,12 @@ module SecureBidding
         result = SecureBidding::Forms::AccountsSystemRoleForm.new.call(data)
         validation_error = SecureBidding::FormValidation.response_for(app, result)
         return validation_error if validation_error
+
+        role_name = (data['role'] || data[:role]).to_s
+        unless ADMIN_ASSIGNABLE_ACCOUNT_ROLES.include?(role_name)
+          app.response.status = 400
+          return { error: 'Only admin or member account roles can be assigned via this endpoint' }
+        end
 
         result = SecureBidding::Services::Roles::AssignSystemRole.call(
           account_id: id,

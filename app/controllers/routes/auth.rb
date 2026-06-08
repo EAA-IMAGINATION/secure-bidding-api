@@ -194,10 +194,10 @@ module SecureBidding
       end
 
       def self.frontend_base_url(req)
-        frontend = ENV['FRONTEND_APP_URL'].to_s.strip
+        frontend = SecureBidding::Environment.env_value('FRONTEND_APP_URL', 'frontend_app_url').to_s.strip
         return frontend.chomp('/') unless frontend.empty?
 
-        app_url = ENV['APP_URL'].to_s.strip
+        app_url = SecureBidding::Environment.env_value('APP_URL', 'app_url').to_s.strip
         return app_url.chomp('/') unless app_url.empty?
 
         "#{req.scheme}://#{req.host}"

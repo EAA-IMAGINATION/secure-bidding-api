@@ -48,8 +48,9 @@ describe 'Mailer To Go SMTP integration' do
     }
 
     ENV['MAILERTOGO_URL'] = 'smtp://mailertogo-user:mailertogo-password@smtp.us-west-1.mailertogo.net:587?authentication=plain'
-    ENV['MAILERTOGO_FROM_EMAIL'] = 'securebidfreelanceprocurementh@gmail.com'
+    ENV['MAILERTOGO_FROM_EMAIL'] = 'noreply@freelanceprocurementhub.tech'
     ENV['MAILERTOGO_FROM_NAME'] = 'Secure Bidding API'
+    ENV['MAILERTOGO_SMTP_DOMAIN'] = 'freelanceprocurementhub.tech'
     yield
   ensure
     original.each do |key, value|
