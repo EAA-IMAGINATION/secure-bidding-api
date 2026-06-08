@@ -2,11 +2,8 @@
 
 ENV['RACK_ENV'] = 'test'
 
-require 'minitest/autorun'
-require 'rack/test'
-require 'json'
+require_relative 'spec_helper'
 require 'cgi'
-require_relative '../app/require_app'
 
 describe 'API /api/v1/bid_submissions' do
   include Rack::Test::Methods
@@ -73,9 +70,8 @@ describe 'API /api/v1/bid_submissions' do
     bidder = create_account(username: 'route-bidder', email: 'route-bidder@example.com')
     payload = {
       project_id: project.id,
-      contractor_alias: 'route-user',
-      plaintext_bid: 'p@ssw0rd'
-    }
+      contractor_alias: 'route-user'
+    }.merge(sample_client_bid_payload('p@ssw0rd'))
 
     post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
 
@@ -86,7 +82,8 @@ describe 'API /api/v1/bid_submissions' do
 
     stored = SecureBidding::BidSubmission[response_body['id']]
     _(stored).wont_be_nil
-    _(stored.secure_encrypted_bid).wont_equal payload[:plaintext_bid]
+    _(stored.encrypted_bid_amount).wont_be_nil
+    _(stored.encrypted_proposal_text).wont_be_nil
   end
 
   it 'SAD: returns 400 for invalid payload' do
@@ -98,7 +95,7 @@ describe 'API /api/v1/bid_submissions' do
     response_body = JSON.parse(last_response.body)
     _(response_body['error']).must_be_kind_of Hash
     _(response_body['error']['project_id']).wont_be_nil
-    _(response_body['error']['plaintext_bid']).wont_be_nil
+    _(response_body['error']['encrypted_bid_amount']).wont_be_nil
   end
 
   it 'HAPPY: returns bid submission metadata for an existing id' do
@@ -133,30 +130,28 @@ describe 'API /api/v1/bid_submissions' do
     _(response_body['error']).must_equal 'Bid submission not found'
   end
 
-  it 'SAD: blocks mass assignment keys for bid submission creation' do
+  it 'SAD: ignores mass-assigned id for bid submission creation' do
     project = SecureBidding::Project.create(title: 'locked-project', budget_cents: 45_000, state: 'published')
     bidder = create_account(username: 'locked-bidder', email: 'locked-bidder@example.com')
     payload = {
       project_id: project.id,
       contractor_alias: 'locked-user',
-      plaintext_bid: 'p@ssw0rd',
-      id: 'forced-id'
-    }
+      id: '00000000-0000-0000-0000-000000000099'
+    }.merge(sample_client_bid_payload('p@ssw0rd'))
 
     post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
 
-    _(last_response.status).must_equal 400
+    _(last_response.status).must_equal 201
     response_body = JSON.parse(last_response.body)
-    _(response_body['error']).must_equal 'Invalid bid submission attributes'
-    _(SecureBidding::BidSubmission.count).must_equal 0
+    _(response_body['id']).wont_equal '00000000-0000-0000-0000-000000000099'
+    _(SecureBidding::BidSubmission['00000000-0000-0000-0000-000000000099']).must_be_nil
   end
 
   it 'SAD: rejects SQL injection string in project_id for bid submission creation' do
     payload = {
       project_id: "00000000-0000-0000-0000-000000000000' OR 1=1 --",
-      contractor_alias: 'db-password',
-      plaintext_bid: 'p@ssw0rd'
-    }
+      contractor_alias: 'db-password'
+    }.merge(sample_client_bid_payload('p@ssw0rd'))
 
     post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
 
@@ -176,9 +171,8 @@ describe 'API /api/v1/bid_submissions' do
     bidder = create_account(username: 'saved-bidder', email: 'saved-bidder@example.com')
     payload = {
       project_id: project.id,
-      contractor_alias: 'blocked-bidder',
-      plaintext_bid: 'will-not-save'
-    }
+      contractor_alias: 'blocked-bidder'
+    }.merge(sample_client_bid_payload('will-not-save'))
 
     post '/api/v1/bid_submissions', payload.to_json, auth_header_for(bidder)
 
@@ -191,9 +185,8 @@ describe 'API /api/v1/bid_submissions' do
     project = SecureBidding::Project.create(title: 'login-required-project', budget_cents: 99_000, state: 'published')
     payload = {
       project_id: project.id,
-      contractor_alias: 'anonymous',
-      plaintext_bid: 'not-allowed'
-    }
+      contractor_alias: 'anonymous'
+    }.merge(sample_client_bid_payload('not-allowed'))
 
     post '/api/v1/bid_submissions', payload.to_json, { 'CONTENT_TYPE' => 'application/json' }
 

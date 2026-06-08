@@ -45,12 +45,15 @@ module SecureBidding
 
         project_id = payload['project_id'] || payload[:project_id]
         contractor_alias = payload['contractor_alias'] || payload[:contractor_alias]
-        plaintext_bid = payload['plaintext_bid'] || payload[:plaintext_bid]
+        encrypted_bid_amount = payload['encrypted_bid_amount'] || payload[:encrypted_bid_amount]
+        encrypted_proposal_text = payload['encrypted_proposal_text'] || payload[:encrypted_proposal_text]
 
-        required_missing = [project_id, contractor_alias, plaintext_bid].any? { |value| value.to_s.strip.empty? }
+        required_missing = [project_id, contractor_alias, encrypted_bid_amount, encrypted_proposal_text].any? do |value|
+          value.to_s.strip.empty?
+        end
         if required_missing
           app.response.status = 400
-          { error: 'project_id, contractor_alias, and plaintext_bid are required' }
+          { error: 'project_id, contractor_alias, encrypted_bid_amount, and encrypted_proposal_text are required' }
         elsif !app.valid_uuid?(project_id)
           app.response.status = 400
           { error: 'project_id must be a UUID' }
@@ -67,10 +70,13 @@ module SecureBidding
           app.response.status = 403
           { error: 'Project owner cannot bid on own project' }
         else
-          bid_submission = BidSubmission.new
-          attributes = payload.reject { |key_name, _| key_name.to_s == 'plaintext_bid' }
-          bid_submission.set(attributes.transform_keys(&:to_sym))
-          bid_submission.encrypt_bid(plaintext_bid)
+          auth_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
+          bid_submission = BidSubmission.new(
+            project_id: project_id,
+            contractor_alias: contractor_alias,
+            bidder_account_id: auth_account_id
+          )
+          bid_submission.store_client_ciphertext(encrypted_bid_amount, encrypted_proposal_text)
           bid_submission.save
 
           app.class::APP_LOGGER.info("bid_submission_created id=#{bid_submission.id}")
@@ -78,7 +84,11 @@ module SecureBidding
           { id: bid_submission.id, status: 'created' }
         end
       rescue Sequel::MassAssignmentRestriction
-        app.log_mass_assignment_attempt('bid_submission', payload, BidSubmission.allowed_columns + [:plaintext_bid])
+        app.log_mass_assignment_attempt(
+          'bid_submission',
+          payload,
+          BidSubmission.allowed_columns + %i[encrypted_bid_amount encrypted_proposal_text]
+        )
         app.response.status = 400
         { error: 'Invalid bid submission attributes' }
       end

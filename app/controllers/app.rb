@@ -87,8 +87,18 @@ module SecureBidding
         id: project.id,
         title: project.title,
         budget_cents: project.budget_cents,
-        state: project.state
+        state: project.state,
+        bidding_deadline: project.bidding_deadline&.iso8601,
+        nacl_public_key: project.nacl_public_key
       }
+      payload[:awarded_bid_submission_id] = project.awarded_bid_submission_id
+      payload[:payment_status] = project.payment_status
+      payload[:awarded_bid_amount_cents] = project.awarded_bid_amount_cents
+      payload[:payment_amount_cents] = project.payment_amount_cents
+      payload[:bidding_closed] = SecureBidding::Policies::ProjectPolicy.bidding_closed_for?(project)
+      if policy&.reveal_keys?
+        payload[:nacl_encrypted_private_key] = project.nacl_encrypted_private_key
+      end
       payload[:policy] = policy.summary if policy
       payload
     end
@@ -97,10 +107,27 @@ module SecureBidding
       payload = {
         id: bid_submission.id,
         project_id: bid_submission.project_id,
-        contractor_alias: bid_submission.contractor_alias
+        contractor_alias: bid_submission.contractor_alias,
+        bidder_account_id: bid_submission.bidder_account_id
       }
+      if policy.nil? || policy.show?
+        payload[:encrypted_bid_amount] = parse_json_field(bid_submission.encrypted_bid_amount)
+        payload[:encrypted_proposal_text] = parse_json_field(bid_submission.encrypted_proposal_text)
+        payload[:encrypted_document] = parse_json_field(bid_submission.encrypted_document)
+        payload[:document_file_name] = bid_submission.document_file_name
+        payload[:document_file_hash] = bid_submission.document_file_hash
+      end
       payload[:policy] = policy.summary if policy
       payload
+    end
+
+    def parse_json_field(value)
+      return value if value.is_a?(Hash)
+      return nil if value.nil? || value.to_s.strip.empty?
+
+      JSON.parse(value)
+    rescue JSON::ParserError
+      nil
     end
 
     def payment_response(payment, policy: nil)

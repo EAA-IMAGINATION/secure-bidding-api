@@ -78,7 +78,7 @@ Required coupling:
 - App `API_URL` → production API base URL above.
 - App `APP_URL` / Google `GOOGLE_REDIRECT_URI` → custom app domain.
 - API `GOOGLE_CLIENT_ID` matches app SSO config.
-- Postgres `schema_info.version` = latest migration (currently **16**).
+- Postgres `schema_info.version` = latest migration (currently **19**).
 
 Do **not** run `db:seed` on production. Schema changes:
 

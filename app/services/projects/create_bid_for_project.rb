@@ -11,17 +11,26 @@ module SecureBidding
           project = SecureBidding::Project[project_id]
           return { ok: false, status: 404, error: 'Project not found' } if project.nil?
           return { ok: false, status: 403, error: 'Project is not open for bidding' } unless project.state == 'published'
+          if SecureBidding::Policies::ProjectPolicy.bidding_closed_for?(project)
+            return { ok: false, status: 403, error: 'Bidding deadline has passed' }
+          end
           return { ok: false, status: 403, error: 'Login required to bid on projects' } if auth_account.nil?
 
           bidder_account_id = payload['bidder_account_id']
           contractor_alias = payload['contractor_alias']
-          plaintext_bid = payload['plaintext_bid']
+          encrypted_bid_amount = payload['encrypted_bid_amount']
+          encrypted_proposal_text = payload['encrypted_proposal_text']
+          encrypted_document = payload['encrypted_document']
+          document_file_name = payload['document_file_name']
+          document_file_hash = payload['document_file_hash']
 
-          if [bidder_account_id, contractor_alias, plaintext_bid].any? { |value| value.to_s.strip.empty? }
+          if [bidder_account_id, contractor_alias, encrypted_bid_amount, encrypted_proposal_text].any? { |value| value.to_s.strip.empty? }
             return { ok: false, status: 400,
-                     error: 'bidder_account_id, contractor_alias, and plaintext_bid are required' }
+                     error: 'bidder_account_id, contractor_alias, encrypted_bid_amount, and encrypted_proposal_text are required' }
           elsif !uuid?(bidder_account_id)
             return { ok: false, status: 400, error: 'bidder_account_id must be a UUID' }
+          elsif !ClientCiphertext.valid_envelope?(encrypted_bid_amount) || !ClientCiphertext.valid_envelope?(encrypted_proposal_text)
+            return { ok: false, status: 400, error: 'encrypted bid payloads must be valid NaCl envelopes' }
           end
 
           bidder = SecureBidding::Account[bidder_account_id]
@@ -36,9 +45,15 @@ module SecureBidding
 
           bid_submission = SecureBidding::BidSubmission.new(
             project_id: project.id,
-            contractor_alias: contractor_alias
+            contractor_alias: contractor_alias,
+            bidder_account_id: bidder.id
           )
-          bid_submission.encrypt_bid(plaintext_bid)
+          bid_submission.store_client_ciphertext(encrypted_bid_amount, encrypted_proposal_text)
+          if encrypted_document && !encrypted_document.to_s.strip.empty?
+            bid_submission.encrypted_document = ClientCiphertext.normalize_envelope(encrypted_document)
+            bid_submission.document_file_name = document_file_name.to_s.strip
+            bid_submission.document_file_hash = document_file_hash.to_s.strip
+          end
           bid_submission.save
           { ok: true, bid_submission: bid_submission }
         end

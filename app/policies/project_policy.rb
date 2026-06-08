@@ -10,7 +10,9 @@ module SecureBidding
       end
 
       def show?
-        scoped_read?(RESOURCE) && (published? || admin? || manage?)
+        return false unless scoped_read?(RESOURCE)
+
+        admin? || manage? || view_as_awarded_bidder? || published?
       end
 
       def create?
@@ -34,7 +36,7 @@ module SecureBidding
       end
 
       def bid?
-        scoped_write?(RESOURCE) && authenticated? && email_verified? && published? && !manage?
+        scoped_write?(RESOURCE) && authenticated? && email_verified? && published? && !bidding_closed? && !manage?
       end
 
       def view_memberships?
@@ -53,6 +55,41 @@ module SecureBidding
 
       def manage_milestones?
         scoped_write?(RESOURCE) && email_verified? && manage?
+      end
+
+      def reveal_keys?
+        scoped_read?(RESOURCE) && email_verified? && manage? && bidding_closed?
+      end
+
+      def award_bid?
+        scoped_write?(RESOURCE) && email_verified? && manage? && bidding_closed? && record.state == 'published'
+      end
+
+      def request_payment?
+        return false unless scoped_write?(RESOURCE) && authenticated? && email_verified?
+        return false unless record.state == 'in_progress'
+        return false if record.awarded_bid_submission_id.nil?
+
+        awarded = SecureBidding::BidSubmission[record.awarded_bid_submission_id]
+        awarded && awarded.bidder_account_id == subject_account_id
+      end
+
+      def process_payment?
+        scoped_write?(RESOURCE) && email_verified? && manage? &&
+          record.state == 'payment_pending' && record.payment_status == 'requested'
+      end
+
+      def acknowledge_payment?
+        scoped_write?(RESOURCE) && email_verified? && view_as_awarded_bidder? &&
+          record.state == 'payment_pending' && record.payment_status == 'in_process'
+      end
+
+      def view_as_awarded_bidder?
+        return false unless authenticated?
+        return false if record.awarded_bid_submission_id.nil?
+
+        awarded = SecureBidding::BidSubmission[record.awarded_bid_submission_id]
+        awarded && awarded.bidder_account_id == subject_account_id
       end
 
       # Used by other policies (payments, bid submissions).
@@ -94,7 +131,11 @@ module SecureBidding
 
           published_ids = scope.where(state: 'published').select_map(:id)
           managed_ids = ProjectPolicy.managed_project_ids_for(account_id)
-          visible_ids = (published_ids + managed_ids).uniq
+          awarded_ids = scope.where(Sequel.~(awarded_bid_submission_id: nil)).all.filter_map do |project|
+            bid = SecureBidding::BidSubmission[project.awarded_bid_submission_id]
+            bid&.bidder_account_id == account_id ? project.id : nil
+          end
+          visible_ids = (published_ids + managed_ids + awarded_ids).uniq
 
           scope.where(id: visible_ids).order(:id).all
         end
@@ -107,7 +148,11 @@ module SecureBidding
       end
 
       def bidding_closed?
-        deadline = record.bidding_deadline
+        self.class.bidding_closed_for?(record)
+      end
+
+      def self.bidding_closed_for?(project)
+        deadline = project.bidding_deadline
         return false if deadline.nil?
 
         Time.now >= deadline

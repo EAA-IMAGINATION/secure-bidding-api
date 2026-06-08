@@ -74,13 +74,13 @@ Sequel.seed(:development) do
         project: alpha_project,
         bidder_account_id: bidder.id,
         contractor_alias: 'seed-vendor-a',
-        plaintext_bid: 'alpha-secret'
+        label: 'alpha-secret'
       },
       {
         project: beta_project,
         bidder_account_id: bidder.id,
         contractor_alias: 'seed-vendor-b',
-        plaintext_bid: 'beta-secret'
+        label: 'beta-secret'
       }
     ]
 
@@ -91,12 +91,18 @@ Sequel.seed(:development) do
       )
       bid_submission = existing
       if bid_submission.nil?
+        envelope = {
+          'ephemeralPublicKey' => Base64.strict_encode64('e' * 32),
+          'nonce' => Base64.strict_encode64('n' * 24),
+          'ciphertext' => Base64.strict_encode64(bid_spec[:label])
+        }
         result = SecureBidding::Services::Projects::CreateBidForProject.call(
           project_id: bid_spec[:project].id,
           payload: {
             'bidder_account_id' => bid_spec[:bidder_account_id],
             'contractor_alias' => bid_spec[:contractor_alias],
-            'plaintext_bid' => bid_spec[:plaintext_bid]
+            'encrypted_bid_amount' => envelope,
+            'encrypted_proposal_text' => envelope.merge('ciphertext' => Base64.strict_encode64("#{bid_spec[:label]}-proposal"))
           },
           auth_account: { account_id: bid_spec[:bidder_account_id] }
         )

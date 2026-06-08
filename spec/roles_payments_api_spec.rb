@@ -2,10 +2,7 @@
 
 ENV['RACK_ENV'] = 'test'
 
-require 'minitest/autorun'
-require 'rack/test'
-require 'json'
-require_relative '../app/require_app'
+require_relative 'spec_helper'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API role and payment placeholders' do
@@ -115,9 +112,8 @@ describe 'API role and payment placeholders' do
     post "/api/v1/projects/#{project_id}/bids",
          {
            bidder_account_id: bidder.id,
-           contractor_alias: 'acme-bidder',
-           plaintext_bid: 'secret-bid'
-         }.to_json,
+           contractor_alias: 'acme-bidder'
+         }.merge(sample_client_bid_payload('secret-bid')).to_json,
          auth_header_for(bidder)
 
     _(last_response.status).must_equal 201
@@ -146,9 +142,8 @@ describe 'API role and payment placeholders' do
     post "/api/v1/projects/#{project_id}/bids",
          {
            bidder_account_id: outsider.id,
-           contractor_alias: 'not-allowed',
-           plaintext_bid: 'should-fail'
-         }.to_json,
+           contractor_alias: 'not-allowed'
+         }.merge(sample_client_bid_payload('should-fail')).to_json,
          auth_header_for(outsider)
 
     _(last_response.status).must_equal 403
@@ -177,9 +172,8 @@ describe 'API role and payment placeholders' do
     post "/api/v1/projects/#{project_id}/bids",
          {
            bidder_account_id: owner.id,
-           contractor_alias: 'self-owner',
-           plaintext_bid: 'should-be-rejected'
-         }.to_json,
+           contractor_alias: 'self-owner'
+         }.merge(sample_client_bid_payload('should-be-rejected')).to_json,
          auth_header_for(owner)
 
     _(last_response.status).must_equal 403
@@ -209,9 +203,8 @@ describe 'API role and payment placeholders' do
     post "/api/v1/projects/#{project_id}/bids",
          {
            bidder_account_id: bidder.id,
-           contractor_alias: 'payment-bidder',
-           plaintext_bid: 'payment-secret-bid'
-         }.to_json,
+           contractor_alias: 'payment-bidder'
+         }.merge(sample_client_bid_payload('payment-secret-bid')).to_json,
          auth_header_for(bidder)
     _(last_response.status).must_equal 201
     bid_submission_id = JSON.parse(last_response.body)['id']

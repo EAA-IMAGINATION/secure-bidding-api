@@ -7,7 +7,8 @@
 
 ## Rule
 
-Every route and model change must satisfy security checks from `SECURITY.md`.
+Every route and model change must satisfy the security patterns in hub
+`PROJECT_STATUS.md` and the repo policy objects under `app/policies/`.
 
 ## Checklist
 

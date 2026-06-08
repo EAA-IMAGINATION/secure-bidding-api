@@ -2,11 +2,8 @@
 
 ENV['RACK_ENV'] = 'test'
 
-require 'minitest/autorun'
-require 'rack/test'
-require 'json'
+require_relative 'spec_helper'
 require 'cgi'
-require_relative '../app/require_app'
 
 describe 'API /api/v1/projects' do
   include Rack::Test::Methods
@@ -80,7 +77,7 @@ describe 'API /api/v1/projects' do
     project_id = JSON.parse(last_response.body)['id']
 
     post '/api/v1/bid_submissions',
-         { project_id: project_id, contractor_alias: 'bidder-a', plaintext_bid: 'secret' }.to_json,
+         { project_id: project_id, contractor_alias: 'bidder-a' }.merge(sample_client_bid_payload('secret')).to_json,
          auth_header_for(bidder)
     _(last_response.status).must_equal 201
 
@@ -231,9 +228,8 @@ describe 'API /api/v1/projects' do
     post '/api/v1/bid_submissions',
          {
            project_id: project_id,
-           contractor_alias: 'flow-freelancer',
-           plaintext_bid: 'encrypted-like-payload'
-         }.to_json,
+           contractor_alias: 'flow-freelancer'
+         }.merge(sample_client_bid_payload('encrypted-like-payload')).to_json,
          auth_header_for(bidder)
     _(last_response.status).must_equal 201
     bid_submission_id = JSON.parse(last_response.body)['id']
@@ -252,6 +248,85 @@ describe 'API /api/v1/projects' do
     _(response_body['bid_submissions'][0]['project_id']).must_equal project_id
   end
 
+  it 'SECURITY: process_payment records the stored awarded amount and ignores client payment_amount_cents' do
+    creator = create_account(username: 'fixed-pay-owner', email: 'fixed-pay-owner@example.com')
+    bidder = create_account(username: 'fixed-pay-freelancer', email: 'fixed-pay-freelancer@example.com')
+
+    post '/api/v1/projects',
+         { title: 'fixed-pay-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(creator)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'fixed-pay-freelancer'
+         }.merge(sample_client_bid_payload('99000')).to_json,
+         auth_header_for(bidder)
+    bid_submission_id = JSON.parse(last_response.body)['id']
+
+    project = SecureBidding::Project[project_id]
+    project.update(bidding_deadline: Time.now - 60)
+
+    post "/api/v1/projects/#{project_id}/award",
+         { bid_submission_id: bid_submission_id, awarded_bid_amount_cents: 99_000 }.to_json,
+         auth_header_for(creator)
+    _(last_response.status).must_equal 200
+
+    post "/api/v1/projects/#{project_id}/request_payment", {}.to_json, auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+
+    post "/api/v1/projects/#{project_id}/process_payment",
+         { payment_amount_cents: 1 }.to_json,
+         auth_header_for(creator)
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['payment_amount_cents']).must_equal 99_000
+  end
+
+  it 'HAPPY: awarded freelancer accepts payment and closes project' do
+    creator = create_account(username: 'receipt-owner', email: 'receipt-owner@example.com')
+    bidder = create_account(username: 'receipt-freelancer', email: 'receipt-freelancer@example.com')
+
+    post '/api/v1/projects',
+         { title: 'receipt-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(creator)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'receipt-freelancer'
+         }.merge(sample_client_bid_payload('99000')).to_json,
+         auth_header_for(bidder)
+    bid_submission_id = JSON.parse(last_response.body)['id']
+
+    project = SecureBidding::Project[project_id]
+    project.update(bidding_deadline: Time.now - 60)
+
+    post "/api/v1/projects/#{project_id}/award",
+         { bid_submission_id: bid_submission_id, awarded_bid_amount_cents: 99_000 }.to_json,
+         auth_header_for(creator)
+    _(last_response.status).must_equal 200
+
+    post "/api/v1/projects/#{project_id}/request_payment", {}.to_json, auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+
+    post "/api/v1/projects/#{project_id}/process_payment", {}.to_json, auth_header_for(creator)
+    _(last_response.status).must_equal 200
+
+    post "/api/v1/projects/#{project_id}/acknowledge_payment", {}.to_json, auth_header_for(creator)
+    _(last_response.status).must_equal 403
+
+    post "/api/v1/projects/#{project_id}/acknowledge_payment", {}.to_json, auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['state']).must_equal 'closed'
+    _(response_body['payment_status']).must_equal 'acknowledged'
+    _(response_body['payment_amount_cents']).must_equal 99_000
+  end
+
   it 'SAD: rejects a non-UUID bidder_account_id when creating a project bid' do
     owner = create_account(username: 'bid-owner', email: 'bid-owner@example.com')
 
@@ -268,9 +343,8 @@ describe 'API /api/v1/projects' do
     post "/api/v1/projects/#{project_id}/bids",
          {
            bidder_account_id: 'not-a-uuid',
-           contractor_alias: 'bad-bidder',
-           plaintext_bid: 'should-fail'
-         }.to_json,
+           contractor_alias: 'bad-bidder'
+         }.merge(sample_client_bid_payload('should-fail')).to_json,
          auth_header_for(owner)
 
     _(last_response.status).must_equal 400
