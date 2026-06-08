@@ -3,12 +3,17 @@
 module SecureBidding
   # Represents a project that can receive bid submissions.
   class Project < Sequel::Model(:projects)
-    VALID_STATES = %w[saved published].freeze
+    VALID_STATES = %w[saved published in_progress payment_pending closed].freeze
+    PAYMENT_STATUSES = %w[none requested in_process acknowledged].freeze
 
     plugin :uuid, field: :id
     plugin :whitelist_security
     plugin :association_dependencies
-    set_allowed_columns :title, :budget_cents, :state, :bidding_deadline, :nacl_public_key, :nacl_encrypted_private_key
+    set_allowed_columns :title, :budget_cents, :state, :bidding_deadline, :nacl_public_key,
+                        :nacl_encrypted_private_key, :awarded_bid_submission_id, :payment_status,
+                        :awarded_bid_amount_cents, :payment_amount_cents
+
+    many_to_one :awarded_bid_submission, key: :awarded_bid_submission_id, class: 'SecureBidding::BidSubmission'
 
     one_to_many :bid_submissions, key: :project_id, class: 'SecureBidding::BidSubmission'
     one_to_many :account_projects, key: :project_id, class: 'SecureBidding::AccountProject'

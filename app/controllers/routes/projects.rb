@@ -58,6 +58,30 @@ module SecureBidding
             end
           end
 
+          req.on 'award' do
+            req.post true do
+              award_project_bid(req, app, id)
+            end
+          end
+
+          req.on 'request_payment' do
+            req.post true do
+              request_project_payment(req, app, id)
+            end
+          end
+
+          req.on 'process_payment' do
+            req.post true do
+              process_project_payment(req, app, id)
+            end
+          end
+
+          req.on 'acknowledge_payment' do
+            req.post true do
+              acknowledge_project_payment(req, app, id)
+            end
+          end
+
           req.get true do
             get_project(req, app, id)
           end
@@ -291,7 +315,7 @@ module SecureBidding
         bidder_account_id = data['bidder_account_id'] || data[:bidder_account_id]
         if bidder_account_id.to_s.strip.empty?
           app.response.status = 400
-          return { error: 'bidder_account_id, contractor_alias, and plaintext_bid are required' }
+          return { error: 'bidder_account_id, contractor_alias, encrypted_bid_amount, and encrypted_proposal_text are required' }
         elsif !bidder_account_id.to_s.match?(/\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/)
           app.response.status = 400
           return { error: 'bidder_account_id must be a UUID' }
@@ -412,6 +436,79 @@ module SecureBidding
         end
       end
 
+      def self.award_project_bid(_req, app, id)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        data = app.parse_json_request_body
+        return data if app.response.status == 400
+
+        bid_submission_id = data['bid_submission_id'] || data[:bid_submission_id]
+        if bid_submission_id.to_s.strip.empty?
+          app.response.status = 400
+          return { error: 'bid_submission_id is required' }
+        end
+
+        result = SecureBidding::Services::Projects::AwardBid.call(
+          project_id: id,
+          bid_submission_id: bid_submission_id,
+          auth_account: app.auth_account,
+          awarded_bid_amount_cents: data['awarded_bid_amount_cents'] || data[:awarded_bid_amount_cents]
+        )
+        if result[:ok]
+          { project_id: id, awarded_bid_submission_id: result[:awarded_bid_submission_id], state: 'in_progress' }
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
+        end
+      end
+
+      def self.request_project_payment(_req, app, id)
+        lifecycle_action(id, app) do |project_id|
+          SecureBidding::Services::Projects::RequestPayment.call(project_id: project_id, auth_account: app.auth_account)
+        end
+      end
+
+      def self.process_project_payment(_req, app, id)
+        lifecycle_action(id, app) do |project_id|
+          SecureBidding::Services::Projects::ProcessPayment.call(
+            project_id: project_id,
+            auth_account: app.auth_account
+          )
+        end
+      end
+
+      def self.acknowledge_project_payment(_req, app, id)
+        lifecycle_action(id, app) do |project_id|
+          SecureBidding::Services::Projects::AcknowledgePayment.call(project_id: project_id, auth_account: app.auth_account)
+        end
+      end
+
+      def self.lifecycle_action(id, app)
+        unless app.valid_uuid?(id)
+          app.response.status = 404
+          return { error: 'Project not found' }
+        end
+
+        result = yield(id)
+        if result[:ok]
+          project = result[:project]
+          {
+            project_id: project.id,
+            state: project.state,
+            payment_status: project.payment_status,
+            awarded_bid_submission_id: project.awarded_bid_submission_id,
+            awarded_bid_amount_cents: project.awarded_bid_amount_cents,
+            payment_amount_cents: project.payment_amount_cents
+          }.compact
+        else
+          app.response.status = result[:status]
+          { error: result[:error] }
+        end
+      end
+
       def self.list_project_bid_submissions(_req, app, id)
         unless app.valid_uuid?(id)
           app.response.status = 404
@@ -456,7 +553,7 @@ module SecureBidding
 
         if update_data.key?('state') && !Project::VALID_STATES.include?(update_data['state'])
           app.response.status = 400
-          return { error: "state must be 'saved' or 'published'" }
+          return { error: "state must be one of: #{Project::VALID_STATES.join(', ')}" }
         end
 
         if update_data.key?('budget_cents') && !update_data['budget_cents'].to_s.match?(/\A\d+\z/)

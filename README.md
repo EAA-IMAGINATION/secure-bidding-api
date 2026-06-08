@@ -1,5 +1,7 @@
 # Secure Bidding API
 
+Hub-wide goal and progress: [../PROJECT_STATUS.md](../PROJECT_STATUS.md).
+
 Secure Bidding API is a Ruby/Roda service with:
 
 - file-based encrypted bid records (`app/db/store`)

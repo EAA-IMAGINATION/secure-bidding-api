@@ -11,7 +11,9 @@ module SecureBidding
           # Collect per-bidhash: combine secure_encrypted_bid and any bid document hashes
           bid_hashes = project.bid_submissions.map do |bs|
             parts = []
-            parts << bs.secure_encrypted_bid.to_s
+            parts << bs.encrypted_bid_amount.to_s if bs.encrypted_bid_amount
+            parts << bs.encrypted_proposal_text.to_s if bs.encrypted_proposal_text
+            parts << bs.secure_encrypted_bid.to_s if bs.secure_encrypted_bid
             # include bid document hashes if present
             if bs.respond_to?(:bid_documents)
               doc_hashes = bs.bid_documents.map { |d| d.file_hash.to_s }.sort
