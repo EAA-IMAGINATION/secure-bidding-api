@@ -108,7 +108,7 @@ module SecureBidding
       roles << system_role if system_role.to_s.strip != ''
       roles.concat(system_roles_dataset.order(:name).select_map(:name))
       roles << 'project_owner' if project_owner_membership? || collaboration_owner?
-      roles << 'bidder' if bid_submissions_dataset.count.positive?
+      roles << 'bidder' if pending_bidder?
       roles << 'freelancer' if awarded_bid_submissions_dataset.count.positive?
 
       roles.uniq.sort_by { |role| [PROFILE_ROLE_ORDER.index(role) || PROFILE_ROLE_ORDER.length, role] }
@@ -148,8 +148,13 @@ module SecureBidding
       account_projects_dataset.where(collaboration_role: 'owner').count.positive?
     end
 
-    def bid_submissions_dataset
-      SecureBidding::BidSubmission.where(bidder_account_id: id)
+    def pending_bidder?
+      SecureBidding::BidSubmission
+        .join(:projects, id: :project_id)
+        .where(Sequel[:bid_submissions][:bidder_account_id] => id)
+        .where(Sequel[:projects][:state] => 'published')
+        .where(Sequel[:projects][:awarded_bid_submission_id] => nil)
+        .count.positive?
     end
 
     def awarded_bid_submissions_dataset

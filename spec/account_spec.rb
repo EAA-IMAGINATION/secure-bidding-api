@@ -109,7 +109,7 @@ describe 'SecureBidding::Account' do
     bid
   end
 
-  it 'adds bidder when the account has submitted a bid' do
+  it 'adds bidder while a project is still pending freelancer selection' do
     create_member(username: 'project-owner')
     bidder = create_member(username: 'bidder-user')
     project = SecureBidding::Project.create(title: 'bid-project', budget_cents: 100_000, state: 'published')
@@ -118,14 +118,41 @@ describe 'SecureBidding::Account' do
     _(bidder.refresh.profile_roles).must_equal %w[member bidder]
   end
 
-  it 'adds freelancer when the account is the awarded bidder' do
+  it 'promotes to freelancer and drops bidder once the account is awarded' do
     create_member(username: 'award-owner')
     freelancer = create_member(username: 'freelancer-user')
     project = SecureBidding::Project.create(title: 'award-project', budget_cents: 100_000, state: 'in_progress')
     bid = create_bid(project: project, bidder: freelancer)
     project.update(awarded_bid_submission_id: bid.id)
 
-    _(freelancer.refresh.profile_roles).must_equal %w[member bidder freelancer]
+    _(freelancer.refresh.profile_roles).must_equal %w[member freelancer]
+  end
+
+  it 'forfeits bidder when another freelancer is selected' do
+    create_member(username: 'award-owner')
+    loser = create_member(username: 'losing-bidder')
+    winner = create_member(username: 'winning-bidder')
+    project = SecureBidding::Project.create(title: 'lost-bid-project', budget_cents: 100_000, state: 'published')
+    losing_bid = create_bid(project: project, bidder: loser, contractor_alias: 'loser')
+    winning_bid = create_bid(project: project, bidder: winner, contractor_alias: 'winner')
+    project.update(state: 'in_progress', awarded_bid_submission_id: winning_bid.id)
+
+    _(loser.refresh.profile_roles).must_equal %w[member]
+    _(winning_bid.refresh).wont_be_nil
+    _(losing_bid.refresh).wont_be_nil
+  end
+
+  it 'keeps bidder when awarded on one project but still bidding on another' do
+    create_member(username: 'owner-a')
+    create_member(username: 'owner-b')
+    account = create_member(username: 'dual-role-user')
+    awarded_project = SecureBidding::Project.create(title: 'awarded-project', budget_cents: 100_000, state: 'in_progress')
+    pending_project = SecureBidding::Project.create(title: 'pending-project', budget_cents: 80_000, state: 'published')
+    awarded_bid = create_bid(project: awarded_project, bidder: account, contractor_alias: 'awarded')
+    create_bid(project: pending_project, bidder: account, contractor_alias: 'pending')
+    awarded_project.update(awarded_bid_submission_id: awarded_bid.id)
+
+    _(account.refresh.profile_roles).must_equal %w[member bidder freelancer]
   end
 
   it 'removes collaboration join rows when account is deleted' do
