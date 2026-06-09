@@ -125,6 +125,49 @@ describe 'API /api/v1/projects' do
     _(body['error']).must_include 'not yet available'
   end
 
+  it 'HAPPY: lists closed owned and freelancer projects for authenticated members' do
+    owner = create_account(username: 'closed-owner', email: 'closed-owner@example.com')
+    freelancer = create_account(username: 'closed-freelancer', email: 'closed-freelancer@example.com')
+
+    post '/api/v1/projects',
+         { title: 'closed-owner-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: freelancer.id,
+           contractor_alias: 'closed-freelancer'
+         }.merge(sample_client_bid_payload('99000')).to_json,
+         auth_header_for(freelancer)
+    bid_submission_id = JSON.parse(last_response.body)['id']
+
+    project = SecureBidding::Project[project_id]
+    project.update(bidding_deadline: Time.now - 60)
+
+    post "/api/v1/projects/#{project_id}/award",
+         { bid_submission_id: bid_submission_id, awarded_bid_amount_cents: 99_000 }.to_json,
+         auth_header_for(owner)
+    post "/api/v1/projects/#{project_id}/request_payment", {}.to_json, auth_header_for(freelancer)
+    post "/api/v1/projects/#{project_id}/process_payment", {}.to_json, auth_header_for(owner)
+    post "/api/v1/projects/#{project_id}/acknowledge_payment", {}.to_json, auth_header_for(freelancer)
+    _(SecureBidding::Project[project_id].state).must_equal 'closed'
+
+    get '/api/v1/projects', {}, auth_header_for(owner)
+    owner_body = JSON.parse(last_response.body)
+    _(owner_body['projects'].map { |row| row['id'] }).must_include project_id
+    owner_project = owner_body['projects'].find { |row| row['id'] == project_id }
+    _(owner_project['policy']['manage_memberships']).must_equal true
+    _(owner_project['state']).must_equal 'closed'
+
+    get '/api/v1/projects', {}, auth_header_for(freelancer)
+    freelancer_body = JSON.parse(last_response.body)
+    _(freelancer_body['projects'].map { |row| row['id'] }).must_include project_id
+    freelancer_project = freelancer_body['projects'].find { |row| row['id'] == project_id }
+    _(freelancer_project['policy']['view_as_awarded_bidder']).must_equal true
+    _(freelancer_project['state']).must_equal 'closed'
+  end
+
   it 'HAPPY: lists only published projects with GET /api/v1/projects' do
     SecureBidding::Project.create(title: 'p1', budget_cents: 10_000, state: 'saved')
     SecureBidding::Project.create(title: 'p2', budget_cents: 20_000, state: 'published')
