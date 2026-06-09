@@ -55,6 +55,7 @@ describe 'API /api/v1/accounts' do
     _(response_body['id']).must_equal account.id
     _(response_body['username']).must_equal 'route-bob'
     _(response_body['system_role']).must_equal 'admin'
+    _(response_body['profile_roles']).must_equal %w[admin]
     _(response_body['email']).must_equal 'route-bob@example.com'
     _(response_body['phone']).must_equal '+886900000002'
     _(response_body.key?('password_hash')).must_equal false

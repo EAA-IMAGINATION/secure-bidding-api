@@ -8,6 +8,7 @@ module SecureBidding
   # Represents an authenticated user account.
   class Account < Sequel::Model(:accounts)
     VALID_ROLES = %w[admin member system_admin project_owner bidder].freeze
+    PROFILE_ROLE_ORDER = %w[admin system_admin member project_owner bidder freelancer].freeze
 
     plugin :uuid, field: :id
     plugin :whitelist_security
@@ -102,6 +103,17 @@ module SecureBidding
       }
     end
 
+    def profile_roles
+      roles = []
+      roles << system_role if system_role.to_s.strip != ''
+      roles.concat(system_roles_dataset.order(:name).select_map(:name))
+      roles << 'project_owner' if project_owner_membership? || collaboration_owner?
+      roles << 'bidder' if bid_submissions_dataset.count.positive?
+      roles << 'freelancer' if awarded_bid_submissions_dataset.count.positive?
+
+      roles.uniq.sort_by { |role| [PROFILE_ROLE_ORDER.index(role) || PROFILE_ROLE_ORDER.length, role] }
+    end
+
     def self.by_registration_token(token_string)
       account_payload = SecureBidding::AuthToken.load(token_string).payload
       self[account_payload[:account_id]]
@@ -121,6 +133,32 @@ module SecureBidding
     def verify_email!
       self.email_verified_at = Time.now
       save
+    end
+
+    private
+
+    def project_owner_membership?
+      owner_role = Role.first(name: 'project_owner')
+      return false unless owner_role
+
+      project_memberships_dataset.where(role_id: owner_role.id).count.positive?
+    end
+
+    def collaboration_owner?
+      account_projects_dataset.where(collaboration_role: 'owner').count.positive?
+    end
+
+    def bid_submissions_dataset
+      SecureBidding::BidSubmission.where(bidder_account_id: id)
+    end
+
+    def awarded_bid_submissions_dataset
+      awarded_ids = SecureBidding::Project
+                      .where(Sequel.~(awarded_bid_submission_id: nil))
+                      .select_map(:awarded_bid_submission_id)
+      return SecureBidding::BidSubmission.where(false) if awarded_ids.empty?
+
+      SecureBidding::BidSubmission.where(id: awarded_ids, bidder_account_id: id)
     end
   end
 end

@@ -76,6 +76,7 @@ module SecureBidding
         phone: account.phone,
         email_verified: !account.email_verified_at.nil?,
         system_roles: account.system_roles_dataset.order(:name).select_map(:name),
+        profile_roles: account.profile_roles,
         capabilities: account.capabilities
       }
       payload[:policy] = policy.summary if policy
