@@ -36,6 +36,14 @@ namespace :db do
     end
   end
 
+  desc 'Run Sequel migrations for the current environment database'
+  task :migrate_current do
+    env = SecureBidding::Database.environment
+    SecureBidding::Database.connect!(env)
+    SecureBidding::Database.migrate!(env)
+    puts "Migrated #{env} database"
+  end
+
   desc 'Create development and test sqlite databases if missing'
   task :create do
     %w[development test].each do |env|
