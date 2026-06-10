@@ -347,8 +347,8 @@ module SecureBidding
           auth_account: app.auth_account
         )
         if result[:ok]
-          app.response.status = 201
-          { id: result[:bid_submission].id, status: 'created' }
+          app.response.status = result[:updated] ? 200 : 201
+          { id: result[:bid_submission].id, status: result[:updated] ? 'updated' : 'created' }
         else
           app.response.status = result[:status]
           { error: result[:error] }
@@ -369,7 +369,8 @@ module SecureBidding
 
         policy = app.project_policy(project)
         if policy.show?
-          app.project_response(project, policy: policy)
+          auth_account_id = app.auth_account&.then { |account| account[:account_id] || account['account_id'] }
+          app.project_response(project, policy: policy, auth_account_id: auth_account_id)
         else
           app.response.status = 403
           { error: 'Forbidden: you do not have access to this project' }

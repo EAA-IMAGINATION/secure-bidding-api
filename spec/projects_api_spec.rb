@@ -484,6 +484,65 @@ describe 'API /api/v1/projects' do
     _(response_body['error']).must_equal 'All required documents must be uploaded before submitting a bid'
   end
 
+  it 'HAPPY: updates an existing bid instead of creating a duplicate for the same bidder' do
+    owner = create_account(username: 'upsert-owner', email: 'upsert-owner@example.com')
+    bidder = create_account(username: 'upsert-bidder', email: 'upsert-bidder@example.com')
+
+    post '/api/v1/projects',
+         { title: 'upsert-bid-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'upsert-bidder'
+         }.merge(sample_client_bid_payload('first-bid')).to_json,
+         auth_header_for(bidder)
+    _(last_response.status).must_equal 201
+    first_body = JSON.parse(last_response.body)
+    _(first_body['status']).must_equal 'created'
+    first_id = first_body['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'upsert-bidder-v2'
+         }.merge(sample_client_bid_payload('second-bid')).to_json,
+         auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+    second_body = JSON.parse(last_response.body)
+    _(second_body['status']).must_equal 'updated'
+    _(second_body['id']).must_equal first_id
+    _(SecureBidding::BidSubmission.where(project_id: project_id, bidder_account_id: bidder.id).count).must_equal 1
+
+    stored = SecureBidding::BidSubmission[first_id]
+    _(stored.contractor_alias).must_equal 'upsert-bidder-v2'
+  end
+
+  it 'HAPPY: includes my_bid_submission on project detail for the bidding account' do
+    owner = create_account(username: 'mybid-owner', email: 'mybid-owner@example.com')
+    bidder = create_account(username: 'mybid-bidder', email: 'mybid-bidder@example.com')
+
+    post '/api/v1/projects',
+         { title: 'mybid-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'mybid-bidder'
+         }.merge(sample_client_bid_payload('my-bid')).to_json,
+         auth_header_for(bidder)
+
+    get "/api/v1/projects/#{project_id}", '', auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['my_bid_submission']).wont_be_nil
+    _(response_body['my_bid_submission']['contractor_alias']).must_equal 'mybid-bidder'
+  end
+
   it 'SAD: rejects partial required document uploads when creating a project bid' do
     owner = create_account(username: 'partial-docs-owner', email: 'partial-docs-owner@example.com')
     bidder = create_account(username: 'partial-docs-bidder', email: 'partial-docs-bidder@example.com')

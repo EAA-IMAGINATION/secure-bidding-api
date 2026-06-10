@@ -84,7 +84,7 @@ module SecureBidding
       payload
     end
 
-    def project_response(project, policy: nil)
+    def project_response(project, policy: nil, auth_account_id: nil)
       payload = {
         id: project.id,
         title: project.title,
@@ -103,8 +103,25 @@ module SecureBidding
       if policy&.reveal_keys?
         payload[:nacl_encrypted_private_key] = project.nacl_encrypted_private_key
       end
+      my_bid = my_bid_submission_for(project, policy: policy, auth_account_id: auth_account_id)
+      payload[:my_bid_submission] = my_bid if my_bid
       payload[:policy] = policy.summary if policy
       payload
+    end
+
+    def my_bid_submission_for(project, policy:, auth_account_id:)
+      return nil if auth_account_id.to_s.strip.empty?
+      return nil unless policy
+      return nil if policy.manage?
+      return nil if SecureBidding::Policies::ProjectPolicy.bidding_closed_for?(project)
+
+      bid = BidSubmission.first(project_id: project.id, bidder_account_id: auth_account_id)
+      return nil if bid.nil?
+
+      {
+        id: bid.id,
+        contractor_alias: bid.contractor_alias
+      }
     end
 
     def bid_submission_response(bid_submission, policy: nil)

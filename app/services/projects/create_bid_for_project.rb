@@ -50,11 +50,17 @@ module SecureBidding
           return { ok: false, status: 403, error: 'Not authorized to bid for this account' } if auth_account_id != bidder.id
           return { ok: false, status: 403, error: 'Project owner cannot bid on own project' } if owner_of_project?(project.id, bidder.id)
 
-          bid_submission = SecureBidding::BidSubmission.new(
+          bid_submission = SecureBidding::BidSubmission.first(
+            project_id: project.id,
+            bidder_account_id: bidder.id
+          )
+          updated = !bid_submission.nil?
+          bid_submission ||= SecureBidding::BidSubmission.new(
             project_id: project.id,
             contractor_alias: contractor_alias,
             bidder_account_id: bidder.id
           )
+          bid_submission.contractor_alias = contractor_alias
           bid_submission.store_client_ciphertext(encrypted_bid_amount, encrypted_proposal_text)
           if encrypted_document && !encrypted_document.to_s.strip.empty?
             bid_submission.encrypted_document = ClientCiphertext.normalize_envelope(encrypted_document)
@@ -62,7 +68,7 @@ module SecureBidding
             bid_submission.document_file_hash = document_file_hash.to_s.strip
           end
           bid_submission.save
-          { ok: true, bid_submission: bid_submission }
+          { ok: true, bid_submission: bid_submission, updated: updated }
         end
 
         def self.owner_of_project?(project_id, account_id)

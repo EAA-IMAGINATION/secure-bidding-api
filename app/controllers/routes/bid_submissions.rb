@@ -81,22 +81,22 @@ module SecureBidding
           { error: 'All required documents must be uploaded before submitting a bid' }
         else
           auth_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
-          bid_submission = BidSubmission.new(
+          bid_payload = payload.transform_keys(&:to_s).merge('bidder_account_id' => auth_account_id)
+          result = SecureBidding::Services::Projects::CreateBidForProject.call(
             project_id: project_id,
-            contractor_alias: contractor_alias,
-            bidder_account_id: auth_account_id
+            payload: bid_payload,
+            auth_account: app.auth_account
           )
-          bid_submission.store_client_ciphertext(encrypted_bid_amount, encrypted_proposal_text)
-          if encrypted_document && !encrypted_document.to_s.strip.empty?
-            bid_submission.encrypted_document = ClientCiphertext.normalize_envelope(encrypted_document)
-            bid_submission.document_file_name = payload['document_file_name'] || payload[:document_file_name]
-            bid_submission.document_file_hash = payload['document_file_hash'] || payload[:document_file_hash]
+          unless result[:ok]
+            app.response.status = result[:status]
+            return { error: result[:error] }
           end
-          bid_submission.save
 
-          app.class::APP_LOGGER.info("bid_submission_created id=#{bid_submission.id}")
-          app.response.status = 201
-          { id: bid_submission.id, status: 'created' }
+          bid_submission = result[:bid_submission]
+          action = result[:updated] ? 'updated' : 'created'
+          app.class::APP_LOGGER.info("bid_submission_#{action} id=#{bid_submission.id}")
+          app.response.status = result[:updated] ? 200 : 201
+          { id: bid_submission.id, status: action }
         end
       rescue Sequel::MassAssignmentRestriction
         app.log_mass_assignment_attempt(
