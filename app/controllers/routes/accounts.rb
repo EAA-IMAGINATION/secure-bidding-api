@@ -172,7 +172,8 @@ module SecureBidding
           auth: app.authorization,
           username: username
         )
-        authorized.account.merge(api_key: authorized.token)
+        account = Account.first(username: username)
+        app.account_response(account, policy: app.account_policy(account)).merge(api_key: authorized.token)
       rescue SecureBidding::AuthorizeAccount::ForbiddenError
         app.response.status = 404
         { error: 'Account not found' }

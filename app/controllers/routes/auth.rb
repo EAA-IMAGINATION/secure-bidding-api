@@ -172,7 +172,8 @@ module SecureBidding
           username: auth_account.username,
           email: auth_account.email,
           system_role: auth_account.system_role,
-          system_roles: auth_account.system_roles.map(&:name),
+          system_roles: auth_account.system_roles_dataset.order(:name).select_map(:name),
+          profile_roles: auth_account.profile_roles,
           email_verified: !auth_account.email_verified_at.nil?,
           capabilities: auth_account.capabilities,
           policy: policy.summary

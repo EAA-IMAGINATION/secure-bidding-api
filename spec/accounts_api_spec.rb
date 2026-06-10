@@ -602,6 +602,31 @@ describe 'API /api/v1/accounts' do
     _(response_body['error']).must_equal 'Email is already verified'
   end
 
+  it 'HAPPY: returns stacked profile_roles for GET /api/v1/accounts/:username' do
+    owner = SecureBidding::Account.new(username: 'profile-owner', system_role: 'member')
+    owner.set_password('my-secret-pass')
+    owner.set_email('profile-owner@example.com')
+    owner.verify_email!
+    owner.save
+
+    project = SecureBidding::Project.create(title: 'profile-owner-project', budget_cents: 50_000, state: 'published')
+    owner_role = SecureBidding::Role.ensure_role('project_owner')
+    SecureBidding::ProjectMembership.create(account_id: owner.id, project_id: project.id, role_id: owner_role.id)
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: owner.id, username: owner.username, system_role: owner.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    get "/api/v1/accounts/#{owner.username}", {}, headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['profile_roles']).must_equal %w[member project_owner]
+    _(response_body.key?('api_key')).must_equal true
+  end
+
   it 'SAD: does not expose admin user creation routes' do
     get '/api/v1/admin/users/new'
     _(last_response.status).must_equal 404
