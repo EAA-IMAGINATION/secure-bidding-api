@@ -39,6 +39,18 @@ module SecureBidding
         scoped_write?(RESOURCE) && authenticated? && email_verified? && published? && !bidding_closed? && !manage?
       end
 
+      def has_bid_submission?
+        return false unless authenticated?
+
+        account_id = subject_account_id
+        return false if account_id.nil? || record.nil?
+
+        SecureBidding::BidSubmission.first(
+          project_id: record.id,
+          bidder_account_id: account_id
+        ) != nil
+      end
+
       def view_memberships?
         scoped_read?(RESOURCE) && email_verified? && manage?
       end
@@ -123,11 +135,12 @@ module SecureBidding
 
           published_ids = scope.where(state: 'published').select_map(:id)
           managed_ids = ProjectPolicy.managed_project_ids_for(account_id)
+          bidder_ids = SecureBidding::BidSubmission.where(bidder_account_id: account_id).select_map(:project_id)
           awarded_ids = scope.where(Sequel.~(awarded_bid_submission_id: nil)).all.filter_map do |project|
             bid = SecureBidding::BidSubmission[project.awarded_bid_submission_id]
             bid&.bidder_account_id == account_id ? project.id : nil
           end
-          visible_ids = (published_ids + managed_ids + awarded_ids).uniq
+          visible_ids = (published_ids + managed_ids + awarded_ids + bidder_ids).uniq
 
           scope.where(id: visible_ids).order(:id).all
         end

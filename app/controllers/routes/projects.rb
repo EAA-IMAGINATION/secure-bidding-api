@@ -111,8 +111,13 @@ module SecureBidding
       def self.list_projects(_req, app)
         projects = SecureBidding::Policies::ProjectPolicy::Scope.new(app.auth_account, Project).resolve
         visible = projects.select { |project| app.project_policy(project).show? }
+        auth_account_id = app.auth_account&.then { |account| account[:account_id] || account['account_id'] }
         payloads = visible.map do |project|
-          app.project_response(project, policy: app.project_policy(project))
+          app.project_response(
+            project,
+            policy: app.project_policy(project),
+            auth_account_id: auth_account_id
+          )
         end
         { projects: payloads }
       end

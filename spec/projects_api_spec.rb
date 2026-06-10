@@ -520,6 +520,31 @@ describe 'API /api/v1/projects' do
     _(stored.contractor_alias).must_equal 'upsert-bidder-v2'
   end
 
+  it 'HAPPY: includes my_bid_submission on project list for the bidding account' do
+    owner = create_account(username: 'listbid-owner', email: 'listbid-owner@example.com')
+    bidder = create_account(username: 'listbid-bidder', email: 'listbid-bidder@example.com')
+
+    post '/api/v1/projects',
+         { title: 'listbid-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'listbid-bidder'
+         }.merge(sample_client_bid_payload('my-bid')).to_json,
+         auth_header_for(bidder)
+
+    get '/api/v1/projects', '', auth_header_for(bidder)
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    listed = response_body['projects'].find { |project| project['id'] == project_id }
+    _(listed).wont_be_nil
+    _(listed['my_bid_submission']).wont_be_nil
+    _(listed['policy']['has_bid_submission']).must_equal true
+  end
+
   it 'HAPPY: includes my_bid_submission on project detail for the bidding account' do
     owner = create_account(username: 'mybid-owner', email: 'mybid-owner@example.com')
     bidder = create_account(username: 'mybid-bidder', email: 'mybid-bidder@example.com')

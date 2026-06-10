@@ -113,14 +113,14 @@ module SecureBidding
       return nil if auth_account_id.to_s.strip.empty?
       return nil unless policy
       return nil if policy.manage?
-      return nil if SecureBidding::Policies::ProjectPolicy.bidding_closed_for?(project)
 
       bid = BidSubmission.first(project_id: project.id, bidder_account_id: auth_account_id)
       return nil if bid.nil?
 
       {
         id: bid.id,
-        contractor_alias: bid.contractor_alias
+        contractor_alias: bid.contractor_alias,
+        submitted_at: bid.created_at&.iso8601
       }
     end
 
