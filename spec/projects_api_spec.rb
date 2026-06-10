@@ -67,6 +67,30 @@ describe 'API /api/v1/projects' do
     _(stored.state).must_equal 'published'
   end
 
+  it 'HAPPY: stores project description and required bid documents' do
+    account = create_account(username: 'metadata-owner', email: 'metadata-owner@example.com')
+
+    post '/api/v1/projects',
+         {
+           title: 'metadata-project',
+           description: 'Build a secure procurement workflow',
+           required_documents: ['Technical proposal', 'Pricing sheet'],
+           budget_cents: 33_000,
+           state: 'published'
+         }.to_json,
+         auth_header_for(account)
+
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    get "/api/v1/projects/#{project_id}", '', auth_header_for(account)
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['description']).must_equal 'Build a secure procurement workflow'
+    _(response_body['required_documents']).must_equal ['Technical proposal', 'Pricing sheet']
+  end
+
   it 'HAPPY: returns bid count for project owner without bid payloads' do
     owner = create_account(username: 'count-owner', email: 'count-owner@example.com')
     bidder = create_account(username: 'count-bidder', email: 'count-bidder@example.com')
@@ -123,6 +147,49 @@ describe 'API /api/v1/projects' do
     _(last_response.status).must_equal 404
     body = JSON.parse(last_response.body)
     _(body['error']).must_include 'not yet available'
+  end
+
+  it 'HAPPY: lists closed owned and freelancer projects for authenticated members' do
+    owner = create_account(username: 'closed-owner', email: 'closed-owner@example.com')
+    freelancer = create_account(username: 'closed-freelancer', email: 'closed-freelancer@example.com')
+
+    post '/api/v1/projects',
+         { title: 'closed-owner-project', budget_cents: 99_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: freelancer.id,
+           contractor_alias: 'closed-freelancer'
+         }.merge(sample_client_bid_payload('99000')).to_json,
+         auth_header_for(freelancer)
+    bid_submission_id = JSON.parse(last_response.body)['id']
+
+    project = SecureBidding::Project[project_id]
+    project.update(bidding_deadline: Time.now - 60)
+
+    post "/api/v1/projects/#{project_id}/award",
+         { bid_submission_id: bid_submission_id, awarded_bid_amount_cents: 99_000 }.to_json,
+         auth_header_for(owner)
+    post "/api/v1/projects/#{project_id}/request_payment", {}.to_json, auth_header_for(freelancer)
+    post "/api/v1/projects/#{project_id}/process_payment", {}.to_json, auth_header_for(owner)
+    post "/api/v1/projects/#{project_id}/acknowledge_payment", {}.to_json, auth_header_for(freelancer)
+    _(SecureBidding::Project[project_id].state).must_equal 'closed'
+
+    get '/api/v1/projects', {}, auth_header_for(owner)
+    owner_body = JSON.parse(last_response.body)
+    _(owner_body['projects'].map { |row| row['id'] }).must_include project_id
+    owner_project = owner_body['projects'].find { |row| row['id'] == project_id }
+    _(owner_project['policy']['manage_memberships']).must_equal true
+    _(owner_project['state']).must_equal 'closed'
+
+    get '/api/v1/projects', {}, auth_header_for(freelancer)
+    freelancer_body = JSON.parse(last_response.body)
+    _(freelancer_body['projects'].map { |row| row['id'] }).must_include project_id
+    freelancer_project = freelancer_body['projects'].find { |row| row['id'] == project_id }
+    _(freelancer_project['policy']['view_as_awarded_bidder']).must_equal true
+    _(freelancer_project['state']).must_equal 'closed'
   end
 
   it 'HAPPY: lists only published projects with GET /api/v1/projects' do
@@ -390,6 +457,63 @@ describe 'API /api/v1/projects' do
     _(response_body['error']).must_equal 'bidder_account_id must be a UUID'
   end
 
+  it 'SAD: requires document payload when project has required bid documents' do
+    owner = create_account(username: 'docs-owner', email: 'docs-owner@example.com')
+    bidder = create_account(username: 'docs-bidder', email: 'docs-bidder@example.com')
+
+    post '/api/v1/projects',
+         {
+           title: 'docs-required-project',
+           budget_cents: 99_000,
+           state: 'published',
+           required_documents: ['Technical proposal']
+         }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'docs-bidder'
+         }.merge(sample_client_bid_payload('should-fail')).to_json,
+         auth_header_for(bidder)
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'All required documents must be uploaded before submitting a bid'
+  end
+
+  it 'SAD: rejects partial required document uploads when creating a project bid' do
+    owner = create_account(username: 'partial-docs-owner', email: 'partial-docs-owner@example.com')
+    bidder = create_account(username: 'partial-docs-bidder', email: 'partial-docs-bidder@example.com')
+
+    post '/api/v1/projects',
+         {
+           title: 'partial-docs-project',
+           budget_cents: 99_000,
+           state: 'published',
+           required_documents: ['Technical proposal', 'Pricing sheet']
+         }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'partial-docs-bidder',
+           encrypted_document: sample_client_envelope('technical-proposal'),
+           document_file_name: 'technical.pdf',
+           document_file_hash: 'Technical proposal:hash-one'
+         }.merge(sample_client_bid_payload('partial-docs')).to_json,
+         auth_header_for(bidder)
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'All required documents must be uploaded before submitting a bid'
+  end
+
   it 'SAD: returns 404 for unknown project id on /api/v1/projects/:id/bid_submissions' do
     get '/api/v1/projects/00000000-0000-0000-0000-000000000000/bid_submissions'
 
@@ -461,6 +585,22 @@ describe 'API /api/v1/projects' do
     _(response_body['id']).must_equal project.id
     _(response_body['status']).must_equal 'deleted'
     _(SecureBidding::Project[project.id]).must_be_nil
+  end
+
+  it 'HAPPY: project owner can delete their own project' do
+    owner = create_account(username: 'owner-delete', email: 'owner-delete@example.com')
+
+    post '/api/v1/projects',
+         { title: 'owner-delete-project', budget_cents: 50_000, state: 'saved' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    delete "/api/v1/projects/#{project_id}", '', auth_header_for(owner)
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['status']).must_equal 'deleted'
+    _(SecureBidding::Project[project_id]).must_be_nil
   end
 
   it 'SAD: non-admin cannot update a project' do

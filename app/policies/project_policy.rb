@@ -84,14 +84,6 @@ module SecureBidding
           record.state == 'payment_pending' && record.payment_status == 'in_process'
       end
 
-      def view_as_awarded_bidder?
-        return false unless authenticated?
-        return false if record.awarded_bid_submission_id.nil?
-
-        awarded = SecureBidding::BidSubmission[record.awarded_bid_submission_id]
-        awarded && awarded.bidder_account_id == subject_account_id
-      end
-
       # Used by other policies (payments, bid submissions).
       def manage?
         admin? || managed_by_subject?
@@ -139,6 +131,14 @@ module SecureBidding
 
           scope.where(id: visible_ids).order(:id).all
         end
+      end
+
+      def view_as_awarded_bidder?
+        return false unless authenticated?
+        return false if record.awarded_bid_submission_id.nil?
+
+        awarded = SecureBidding::BidSubmission[record.awarded_bid_submission_id]
+        awarded && awarded.bidder_account_id == subject_account_id
       end
 
       private

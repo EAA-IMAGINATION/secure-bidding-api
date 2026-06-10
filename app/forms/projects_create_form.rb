@@ -8,6 +8,8 @@ module SecureBidding
       params do
         required(:title).filled(:string)
         required(:budget_cents).filled(:integer)
+        optional(:description).maybe(:string)
+        optional(:required_documents).maybe(:array)
         optional(:state).maybe(:string)
       end
 

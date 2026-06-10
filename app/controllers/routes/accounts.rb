@@ -131,6 +131,11 @@ module SecureBidding
           return { error: 'Forbidden: only admins can assign system roles' }
         end
 
+        if account_owner?(app, id)
+          app.response.status = 403
+          return { error: 'Forbidden: admins cannot change their own account role' }
+        end
+
         data = app.parse_json_request_body
         return data if app.response.status == 400
 
@@ -206,6 +211,11 @@ module SecureBidding
           validation_error = SecureBidding::FormValidation.response_for(app, form_result)
           return validation_error if validation_error
 
+          if admin?(app) && account_owner?(app, id) && system_role_change?(data)
+            app.response.status = 403
+            return { error: 'Forbidden: admins cannot change their own account role' }
+          end
+
           result = SecureBidding::Services::Accounts::UpdateAccount.call(
             account,
             data,
@@ -279,6 +289,10 @@ module SecureBidding
                             auth.id
                           end
         auth_account_id == account_id
+      end
+
+      def self.system_role_change?(data)
+        data.key?('system_role') || data.key?(:system_role)
       end
 
       def self.resend_verification(_req, app, id)

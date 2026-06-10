@@ -47,28 +47,38 @@ module SecureBidding
         contractor_alias = payload['contractor_alias'] || payload[:contractor_alias]
         encrypted_bid_amount = payload['encrypted_bid_amount'] || payload[:encrypted_bid_amount]
         encrypted_proposal_text = payload['encrypted_proposal_text'] || payload[:encrypted_proposal_text]
+        encrypted_document = payload['encrypted_document'] || payload[:encrypted_document]
+        document_file_hash = payload['document_file_hash'] || payload[:document_file_hash]
 
         required_missing = [project_id, contractor_alias, encrypted_bid_amount, encrypted_proposal_text].any? do |value|
           value.to_s.strip.empty?
         end
+        project = Project[project_id] if app.valid_uuid?(project_id)
+
         if required_missing
           app.response.status = 400
           { error: 'project_id, contractor_alias, encrypted_bid_amount, and encrypted_proposal_text are required' }
         elsif !app.valid_uuid?(project_id)
           app.response.status = 400
           { error: 'project_id must be a UUID' }
-        elsif Project[project_id].nil?
+        elsif project.nil?
           app.response.status = 404
           { error: 'project_id does not reference an existing project' }
-        elsif Project[project_id].state != 'published'
+        elsif project.state != 'published'
           app.response.status = 403
           { error: 'Project is not open for bidding' }
         elsif app.auth_account.nil?
           app.response.status = 401
           { error: 'Login required to bid on projects' }
-        elsif project_owner?(Project[project_id], app.auth_account)
+        elsif project_owner?(project, app.auth_account)
           app.response.status = 403
           { error: 'Project owner cannot bid on own project' }
+        elsif required_documents_for(project).any? && !ClientCiphertext.valid_envelope?(encrypted_document)
+          app.response.status = 400
+          { error: 'All required documents must be uploaded before submitting a bid' }
+        elsif required_documents_for(project).any? && !required_documents_satisfied?(required_documents_for(project), document_file_hash)
+          app.response.status = 400
+          { error: 'All required documents must be uploaded before submitting a bid' }
         else
           auth_account_id = app.auth_account[:account_id] || app.auth_account['account_id']
           bid_submission = BidSubmission.new(
@@ -77,6 +87,11 @@ module SecureBidding
             bidder_account_id: auth_account_id
           )
           bid_submission.store_client_ciphertext(encrypted_bid_amount, encrypted_proposal_text)
+          if encrypted_document && !encrypted_document.to_s.strip.empty?
+            bid_submission.encrypted_document = ClientCiphertext.normalize_envelope(encrypted_document)
+            bid_submission.document_file_name = payload['document_file_name'] || payload[:document_file_name]
+            bid_submission.document_file_hash = payload['document_file_hash'] || payload[:document_file_hash]
+          end
           bid_submission.save
 
           app.class::APP_LOGGER.info("bid_submission_created id=#{bid_submission.id}")
@@ -103,6 +118,23 @@ module SecureBidding
           project_id: project.id,
           role_id: owner_role.id
         ) != nil
+      end
+
+      def self.required_documents_for(project)
+        value = project.required_documents.to_s.strip
+        return [] if value.empty?
+
+        JSON.parse(value)
+      rescue JSON::ParserError
+        []
+      end
+
+      def self.required_documents_satisfied?(required_documents, document_file_hash)
+        submitted = document_file_hash.to_s.split('|').map do |entry|
+          entry.split(':', 2).first.to_s.strip
+        end
+
+        required_documents.all? { |document_name| submitted.include?(document_name.to_s.strip) }
       end
 
       def self.show_bid_submission(_req, app, id)

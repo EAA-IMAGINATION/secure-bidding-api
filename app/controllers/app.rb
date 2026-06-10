@@ -3,6 +3,7 @@
 require 'roda'
 require 'json'
 require 'logger'
+require 'time'
 require_relative '../models/bid'
 require_relative '../models/project'
 require_relative '../models/bid_submission'
@@ -76,6 +77,7 @@ module SecureBidding
         phone: account.phone,
         email_verified: !account.email_verified_at.nil?,
         system_roles: account.system_roles_dataset.order(:name).select_map(:name),
+        profile_roles: account.profile_roles,
         capabilities: account.capabilities
       }
       payload[:policy] = policy.summary if policy
@@ -86,6 +88,8 @@ module SecureBidding
       payload = {
         id: project.id,
         title: project.title,
+        description: project.description,
+        required_documents: parse_json_field(project.required_documents) || [],
         budget_cents: project.budget_cents,
         state: project.state,
         bidding_deadline: project.bidding_deadline&.iso8601,

@@ -1,12 +1,11 @@
 # frozen_string_literal: true
 
-ENV['RACK_ENV'] = 'test'
-
 require 'json'
 require 'minitest/autorun'
 require 'net/smtp'
 require 'rack/test'
-require_relative '../app/require_app'
+require 'uri'
+require_relative 'spec_helper'
 
 describe 'Mailer To Go SMTP integration' do
   include Rack::Test::Methods
@@ -60,7 +59,7 @@ describe 'Mailer To Go SMTP integration' do
 
   def extract_registration_token(message)
     match = message.match(/token=([^"&\s<]+)/)
-    match && match[1]
+    match && URI.decode_www_form_component(match[1])
   end
 
   before do
