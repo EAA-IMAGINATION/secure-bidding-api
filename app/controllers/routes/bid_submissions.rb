@@ -48,6 +48,7 @@ module SecureBidding
         encrypted_bid_amount = payload['encrypted_bid_amount'] || payload[:encrypted_bid_amount]
         encrypted_proposal_text = payload['encrypted_proposal_text'] || payload[:encrypted_proposal_text]
         encrypted_document = payload['encrypted_document'] || payload[:encrypted_document]
+        document_file_hash = payload['document_file_hash'] || payload[:document_file_hash]
 
         required_missing = [project_id, contractor_alias, encrypted_bid_amount, encrypted_proposal_text].any? do |value|
           value.to_s.strip.empty?
@@ -73,6 +74,9 @@ module SecureBidding
           app.response.status = 403
           { error: 'Project owner cannot bid on own project' }
         elsif required_documents_for(project).any? && !ClientCiphertext.valid_envelope?(encrypted_document)
+          app.response.status = 400
+          { error: 'All required documents must be uploaded before submitting a bid' }
+        elsif required_documents_for(project).any? && !required_documents_satisfied?(required_documents_for(project), document_file_hash)
           app.response.status = 400
           { error: 'All required documents must be uploaded before submitting a bid' }
         else
@@ -123,6 +127,14 @@ module SecureBidding
         JSON.parse(value)
       rescue JSON::ParserError
         []
+      end
+
+      def self.required_documents_satisfied?(required_documents, document_file_hash)
+        submitted = document_file_hash.to_s.split('|').map do |entry|
+          entry.split(':', 2).first.to_s.strip
+        end
+
+        required_documents.all? { |document_name| submitted.include?(document_name.to_s.strip) }
       end
 
       def self.show_bid_submission(_req, app, id)

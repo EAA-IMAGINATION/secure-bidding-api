@@ -36,6 +36,8 @@ module SecureBidding
             return { ok: false, status: 400, error: 'encrypted bid payloads must be valid NaCl envelopes' }
           elsif required_documents.any? && !ClientCiphertext.valid_envelope?(encrypted_document)
             return { ok: false, status: 400, error: 'All required documents must be uploaded before submitting a bid' }
+          elsif required_documents.any? && !required_documents_satisfied?(required_documents, document_file_hash)
+            return { ok: false, status: 400, error: 'All required documents must be uploaded before submitting a bid' }
           end
 
           bidder = SecureBidding::Account[bidder_account_id]
@@ -90,6 +92,14 @@ module SecureBidding
           JSON.parse(value)
         rescue JSON::ParserError
           []
+        end
+
+        def self.required_documents_satisfied?(required_documents, document_file_hash)
+          submitted = document_file_hash.to_s.split('|').map do |entry|
+            entry.split(':', 2).first.to_s.strip
+          end
+
+          required_documents.all? { |document_name| submitted.include?(document_name.to_s.strip) }
         end
       end
     end

@@ -6,7 +6,7 @@ require 'minitest/autorun'
 require 'rack/test'
 require 'json'
 require 'cgi'
-require_relative '../app/require_app'
+require_relative 'spec_helper'
 
 # rubocop:disable Metrics/BlockLength
 describe 'API /api/v1/accounts' do
@@ -451,6 +451,51 @@ describe 'API /api/v1/accounts' do
     promoted = SecureBidding::Account[target.id]
     _(promoted.system_role).must_equal 'admin'
   end
+
+  it 'SAD: admin cannot change their own role with system_roles endpoint' do
+    admin = SecureBidding::Account.new(username: 'self-role-admin', system_role: 'admin')
+    admin.set_password('my-secret-pass')
+    admin.set_email('self-role-admin@example.com')
+    admin.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: admin.id, username: admin.username, system_role: admin.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    post "/api/v1/accounts/#{admin.id}/system_roles",
+         { role: 'member' }.to_json,
+         headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Forbidden: admins cannot change their own account role'
+    _(SecureBidding::Account[admin.id].system_role).must_equal 'admin'
+  end
+
+  it 'SAD: admin cannot change their own role with account update' do
+    admin = SecureBidding::Account.new(username: 'self-patch-admin', system_role: 'admin')
+    admin.set_password('my-secret-pass')
+    admin.set_email('self-patch-admin@example.com')
+    admin.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: admin.id, username: admin.username, system_role: admin.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'CONTENT_TYPE' => 'application/json', 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    patch "/api/v1/accounts/#{admin.id}",
+          { system_role: 'member' }.to_json,
+          headers
+
+    _(last_response.status).must_equal 403
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'Forbidden: admins cannot change their own account role'
+    _(SecureBidding::Account[admin.id].system_role).must_equal 'admin'
+  end
+
   it 'HAPPY: account owner can POST /api/v1/accounts/:id/resend_verification' do
     account = SecureBidding::Account.new(username: 'resend-owner', system_role: 'member')
     account.set_password('my-secret-pass')

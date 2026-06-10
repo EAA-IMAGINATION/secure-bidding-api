@@ -484,6 +484,36 @@ describe 'API /api/v1/projects' do
     _(response_body['error']).must_equal 'All required documents must be uploaded before submitting a bid'
   end
 
+  it 'SAD: rejects partial required document uploads when creating a project bid' do
+    owner = create_account(username: 'partial-docs-owner', email: 'partial-docs-owner@example.com')
+    bidder = create_account(username: 'partial-docs-bidder', email: 'partial-docs-bidder@example.com')
+
+    post '/api/v1/projects',
+         {
+           title: 'partial-docs-project',
+           budget_cents: 99_000,
+           state: 'published',
+           required_documents: ['Technical proposal', 'Pricing sheet']
+         }.to_json,
+         auth_header_for(owner)
+    _(last_response.status).must_equal 201
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/bids",
+         {
+           bidder_account_id: bidder.id,
+           contractor_alias: 'partial-docs-bidder',
+           encrypted_document: sample_client_envelope('technical-proposal'),
+           document_file_name: 'technical.pdf',
+           document_file_hash: 'Technical proposal:hash-one'
+         }.merge(sample_client_bid_payload('partial-docs')).to_json,
+         auth_header_for(bidder)
+
+    _(last_response.status).must_equal 400
+    response_body = JSON.parse(last_response.body)
+    _(response_body['error']).must_equal 'All required documents must be uploaded before submitting a bid'
+  end
+
   it 'SAD: returns 404 for unknown project id on /api/v1/projects/:id/bid_submissions' do
     get '/api/v1/projects/00000000-0000-0000-0000-000000000000/bid_submissions'
 
