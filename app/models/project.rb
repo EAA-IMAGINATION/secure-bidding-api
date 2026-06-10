@@ -9,7 +9,7 @@ module SecureBidding
     plugin :uuid, field: :id
     plugin :whitelist_security
     plugin :association_dependencies
-    set_allowed_columns :title, :budget_cents, :state, :bidding_deadline, :nacl_public_key,
+    set_allowed_columns :title, :description, :required_documents, :budget_cents, :state, :bidding_deadline, :nacl_public_key,
                         :nacl_encrypted_private_key, :awarded_bid_submission_id, :payment_status,
                         :awarded_bid_amount_cents, :payment_amount_cents
 

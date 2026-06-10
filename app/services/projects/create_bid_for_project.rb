@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require 'json'
+
 module SecureBidding
   module Services
     module Projects
@@ -23,6 +25,7 @@ module SecureBidding
           encrypted_document = payload['encrypted_document']
           document_file_name = payload['document_file_name']
           document_file_hash = payload['document_file_hash']
+          required_documents = parse_required_documents(project)
 
           if [bidder_account_id, contractor_alias, encrypted_bid_amount, encrypted_proposal_text].any? { |value| value.to_s.strip.empty? }
             return { ok: false, status: 400,
@@ -31,6 +34,8 @@ module SecureBidding
             return { ok: false, status: 400, error: 'bidder_account_id must be a UUID' }
           elsif !ClientCiphertext.valid_envelope?(encrypted_bid_amount) || !ClientCiphertext.valid_envelope?(encrypted_proposal_text)
             return { ok: false, status: 400, error: 'encrypted bid payloads must be valid NaCl envelopes' }
+          elsif required_documents.any? && !ClientCiphertext.valid_envelope?(encrypted_document)
+            return { ok: false, status: 400, error: 'All required documents must be uploaded before submitting a bid' }
           end
 
           bidder = SecureBidding::Account[bidder_account_id]
@@ -76,6 +81,15 @@ module SecureBidding
 
         def self.uuid?(value)
           value.to_s.match?(UUID_FORMAT)
+        end
+
+        def self.parse_required_documents(project)
+          value = project.required_documents.to_s.strip
+          return [] if value.empty?
+
+          JSON.parse(value)
+        rescue JSON::ParserError
+          []
         end
       end
     end

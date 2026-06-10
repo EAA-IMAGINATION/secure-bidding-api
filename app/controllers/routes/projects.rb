@@ -152,7 +152,7 @@ module SecureBidding
 
       def self.create_project_from_auth_token(app, data)
         project = Project.new
-        project.set(data.transform_keys(&:to_sym))
+        project.set(normalize_project_payload(data).transform_keys(&:to_sym))
 
         title = project.title
         budget_cents = project.budget_cents
@@ -603,7 +603,7 @@ module SecureBidding
         end
 
         begin
-          project.update(update_data.transform_keys(&:to_sym))
+          project.update(normalize_project_payload(update_data).transform_keys(&:to_sym))
           { id: project.id, status: 'updated' }
         rescue StandardError => e
           app.class::APP_LOGGER.error("Failed to update project #{id}: #{e.message}")
@@ -629,6 +629,17 @@ module SecureBidding
           app.response.status = 403
           { error: 'Forbidden: only project owner or admin can delete this project' }
         end
+      end
+
+      def self.normalize_project_payload(data)
+        normalized = data.dup
+        if normalized.key?('required_documents')
+          normalized['required_documents'] = Array(normalized['required_documents'])
+                                             .map { |name| name.to_s.strip }
+                                             .reject(&:empty?)
+                                             .to_json
+        end
+        normalized
       end
 
       def self.admin?(app)

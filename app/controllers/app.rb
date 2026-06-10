@@ -3,6 +3,7 @@
 require 'roda'
 require 'json'
 require 'logger'
+require 'time'
 require_relative '../models/bid'
 require_relative '../models/project'
 require_relative '../models/bid_submission'
@@ -87,6 +88,8 @@ module SecureBidding
       payload = {
         id: project.id,
         title: project.title,
+        description: project.description,
+        required_documents: parse_json_field(project.required_documents) || [],
         budget_cents: project.budget_cents,
         state: project.state,
         bidding_deadline: project.bidding_deadline&.iso8601,
