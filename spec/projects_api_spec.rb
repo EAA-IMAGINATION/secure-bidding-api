@@ -205,6 +205,29 @@ describe 'API /api/v1/projects' do
     _(response_body['projects'][0]['title']).must_equal 'p2'
   end
 
+  it 'HAPPY: exposes available_for_bidding policy false after the deadline passes' do
+    open_project = SecureBidding::Project.create(
+      title: 'catalog-open',
+      budget_cents: 10_000,
+      state: 'published',
+      bidding_deadline: Time.now + 3600
+    )
+    closed_project = SecureBidding::Project.create(
+      title: 'catalog-closed',
+      budget_cents: 10_000,
+      state: 'published',
+      bidding_deadline: Time.now - 60
+    )
+
+    get '/api/v1/projects'
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    listed = response_body['projects'].each_with_object({}) { |row, memo| memo[row['id']] = row }
+    _(listed[open_project.id]['policy']['available_for_bidding']).must_equal true
+    _(listed[closed_project.id]['policy']['available_for_bidding']).must_equal false
+  end
+
   it 'HAPPY: fetches a single project with GET /api/v1/projects/:id' do
     project = SecureBidding::Project.create(title: 'single-project', budget_cents: 50_000, state: 'published')
 

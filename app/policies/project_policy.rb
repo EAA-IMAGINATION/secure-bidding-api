@@ -39,6 +39,16 @@ module SecureBidding
         scoped_write?(RESOURCE) && authenticated? && email_verified? && published? && !bidding_closed? && !manage?
       end
 
+      # Published projects still accepting bids (home/catalog listing).
+      def available_for_bidding?
+        scoped_read?(RESOURCE) && published? && !bidding_closed?
+      end
+
+      # Bidder's submission on a project whose bidding window is still open.
+      def track_open_bid?
+        has_bid_submission? && available_for_bidding?
+      end
+
       def has_bid_submission?
         return false unless authenticated?
 
