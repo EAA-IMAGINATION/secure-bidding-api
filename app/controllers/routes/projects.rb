@@ -639,6 +639,11 @@ module SecureBidding
                                              .reject(&:empty?)
                                              .to_json
         end
+        if normalized.key?('bidding_deadline') || normalized.key?(:bidding_deadline)
+          raw_deadline = normalized['bidding_deadline'] || normalized[:bidding_deadline]
+          parsed_deadline = SecureBidding::TaipeiTime.normalize_deadline(raw_deadline)
+          normalized['bidding_deadline'] = parsed_deadline if parsed_deadline
+        end
         normalized
       end
 

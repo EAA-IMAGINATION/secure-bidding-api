@@ -57,6 +57,7 @@ require_relative 'lib/auth_token'
 require_relative 'lib/signed_request'
 require_relative 'lib/client_ciphertext'
 require_relative 'lib/form_validation'
+require_relative 'lib/taipei_time'
 
 require_relative 'forms/base_form'
 require_relative 'policies/base_policy'
