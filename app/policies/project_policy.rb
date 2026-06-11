@@ -12,7 +12,7 @@ module SecureBidding
       def show?
         return false unless scoped_read?(RESOURCE)
 
-        admin? || manage? || view_as_awarded_bidder? || published?
+        admin? || manage? || view_as_awarded_bidder? || published? || pending_owner_request?
       end
 
       def create?
@@ -29,6 +29,16 @@ module SecureBidding
 
       def manage_memberships?
         scoped_write?(RESOURCE) && email_verified? && manage?
+      end
+
+      # True only when the account has an explicit project_owner membership or owner collaboration.
+      def assigned_owner?
+        scoped_write?(RESOURCE) && email_verified? && managed_by_subject?
+      end
+
+      # Admin override on a project they do not own (platform management, not ownership).
+      def admin_access?
+        scoped_write?(RESOURCE) && email_verified? && admin? && !managed_by_subject?
       end
 
       def accept_ownership?

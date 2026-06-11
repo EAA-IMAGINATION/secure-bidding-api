@@ -8,6 +8,27 @@ module SecureBidding
         ALLOWED_ROLES = %w[project_owner bidder].freeze
         UUID_FORMAT = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/.freeze
 
+        def self.resolve_account(account_id: nil, username: nil)
+          id = account_id.to_s.strip
+          name = username.to_s.strip
+
+          unless id.empty?
+            return { ok: false, status: 400, error: 'account_id must be a UUID' } unless uuid?(id)
+
+            account = SecureBidding::Account[id]
+            return { ok: false, status: 404, error: 'Account not found' } if account.nil?
+
+            return { ok: true, account: account }
+          end
+
+          return { ok: false, status: 400, error: 'username is required' } if name.empty?
+
+          account = SecureBidding::Account.first(username: name)
+          return { ok: false, status: 404, error: 'Account not found' } if account.nil?
+
+          { ok: true, account: account }
+        end
+
         def self.call(project_id:, account_id:, role_name:, requested_by_admin:)
           project = SecureBidding::Project[project_id]
           return { ok: false, status: 404, error: 'Project not found' } if project.nil?
@@ -100,6 +121,7 @@ module SecureBidding
             pending: true,
             request: {
               account_id: collaboration.account_id,
+              username: account.username,
               project_id: collaboration.project_id,
               role: 'project_owner',
               status: 'pending'

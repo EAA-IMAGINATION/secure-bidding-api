@@ -182,6 +182,8 @@ describe 'API /api/v1/projects' do
     _(owner_body['projects'].map { |row| row['id'] }).must_include project_id
     owner_project = owner_body['projects'].find { |row| row['id'] == project_id }
     _(owner_project['policy']['manage_memberships']).must_equal true
+    _(owner_project['policy']['assigned_owner']).must_equal true
+    _(owner_project['policy']['admin_access']).must_equal false
     _(owner_project['state']).must_equal 'closed'
 
     get '/api/v1/projects', {}, auth_header_for(freelancer)
@@ -674,6 +676,35 @@ describe 'API /api/v1/projects' do
     _(updated.budget_cents).must_equal 75_000
   end
 
+  it 'HAPPY: admin policy distinguishes platform access from assigned ownership' do
+    SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
+
+    admin = create_account(username: 'admin-policy-user', email: 'admin-policy@example.com')
+    admin.system_role = 'admin'
+    admin.save
+
+    owner = create_account(username: 'real-owner-user', email: 'real-owner@example.com')
+    project = SecureBidding::Project.create(title: 'owner-project-policy', budget_cents: 50_000, state: 'published')
+    owner_role = SecureBidding::Role.ensure_role('project_owner')
+    SecureBidding::ProjectMembership.create(account_id: owner.id, project_id: project.id, role_id: owner_role.id)
+    SecureBidding::AccountProject.create(account_id: owner.id, project_id: project.id, collaboration_role: 'owner')
+
+    get '/api/v1/projects', {}, auth_header_for(admin)
+    admin_body = JSON.parse(last_response.body)
+    admin_project = admin_body['projects'].find { |row| row['id'] == project.id }
+    _(admin_project).wont_be_nil
+    _(admin_project['policy']['manage_memberships']).must_equal true
+    _(admin_project['policy']['assigned_owner']).must_equal false
+    _(admin_project['policy']['admin_access']).must_equal true
+    _(admin_project['policy']['bid']).must_equal false
+
+    get '/api/v1/projects', {}, auth_header_for(owner)
+    owner_body = JSON.parse(last_response.body)
+    owner_project = owner_body['projects'].find { |row| row['id'] == project.id }
+    _(owner_project['policy']['assigned_owner']).must_equal true
+    _(owner_project['policy']['admin_access']).must_equal false
+  end
+
   it 'HAPPY: admin can delete a project with DELETE /api/v1/projects/:id' do
     SecureBidding::AuthToken.setup(SecureBidding::AuthToken.generate_key)
     
@@ -834,6 +865,69 @@ describe 'API /api/v1/projects' do
           { title: 'collab-project-updated' }.to_json,
           auth_header_for(co_owner)
     _(last_response.status).must_equal 200
+  end
+
+  it 'HAPPY: owner invites co-owner by username and invitee can view project before accepting' do
+    owner = create_account(username: 'owner-username-invite', email: 'owner-username-invite@example.com')
+    co_owner = create_account(username: 'co-owner-username-invite', email: 'co-owner-username-invite@example.com')
+
+    post '/api/v1/projects',
+         { title: 'username-collab-project', budget_cents: 93_000, state: 'published' }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { username: co_owner.username, role: 'project_owner' }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 202
+    request_body = JSON.parse(last_response.body)
+    _(request_body['username']).must_equal co_owner.username
+    _(request_body['status']).must_equal 'pending'
+
+    SecureBidding::Project[project_id].update(state: 'in_progress')
+
+    get "/api/v1/projects/#{project_id}", {}, auth_header_for(co_owner)
+    _(last_response.status).must_equal 200
+    detail = JSON.parse(last_response.body)
+    _(detail['policy']['accept_ownership']).must_equal true
+    _(detail['policy']['assigned_owner']).must_equal false
+
+    post "/api/v1/projects/#{project_id}/memberships/accept", {}.to_json, auth_header_for(co_owner)
+    _(last_response.status).must_equal 200
+    _(SecureBidding::AccountProject.first(account_id: co_owner.id, project_id: project_id).collaboration_role).must_equal 'owner'
+  end
+
+  it 'SAD: rejects co-owner invite for unknown username' do
+    owner = create_account(username: 'owner-unknown-invite', email: 'owner-unknown-invite@example.com')
+
+    post '/api/v1/projects',
+         { title: 'unknown-invite-project', budget_cents: 94_000 }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { username: 'no-such-user', role: 'project_owner' }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 404
+    _(JSON.parse(last_response.body)['error']).must_equal 'Account not found'
+  end
+
+  it 'SAD: owner cannot invite themselves as co-owner by username' do
+    owner = create_account(username: 'owner-self-invite', email: 'owner-self-invite@example.com')
+
+    post '/api/v1/projects',
+         { title: 'self-invite-project', budget_cents: 95_000 }.to_json,
+         auth_header_for(owner)
+    project_id = JSON.parse(last_response.body)['id']
+
+    post "/api/v1/projects/#{project_id}/memberships",
+         { username: owner.username, role: 'project_owner' }.to_json,
+         auth_header_for(owner)
+
+    _(last_response.status).must_equal 400
+    _(JSON.parse(last_response.body)['error']).must_equal 'Cannot invite your own account as co-owner'
   end
 
   it 'HAPPY: admin can assign co-owner immediately without pending acceptance' do

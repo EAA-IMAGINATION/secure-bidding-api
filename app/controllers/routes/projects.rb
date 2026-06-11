@@ -244,9 +244,24 @@ module SecureBidding
         validation_error = SecureBidding::FormValidation.response_for(app, result)
         return validation_error if validation_error
 
+        resolved = SecureBidding::Services::Projects::AssignProjectRole.resolve_account(
+          account_id: data['account_id'] || data[:account_id],
+          username: data['username'] || data[:username]
+        )
+        unless resolved[:ok]
+          app.response.status = resolved[:status]
+          return { error: resolved[:error] }
+        end
+
+        auth_account_id = app.auth_account&.then { |auth| auth[:account_id] || auth['account_id'] }
+        if auth_account_id && resolved[:account].id == auth_account_id && !admin?(app)
+          app.response.status = 400
+          return { error: 'Cannot invite your own account as co-owner' }
+        end
+
         result = SecureBidding::Services::Projects::AssignProjectRole.call(
           project_id: id,
-          account_id: data['account_id'] || data[:account_id],
+          account_id: resolved[:account].id,
           role_name: data['role'] || data[:role],
           requested_by_admin: admin?(app)
         )
