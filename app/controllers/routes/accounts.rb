@@ -162,7 +162,7 @@ module SecureBidding
         end
       end
 
-      def self.get_account_by_username(_req, app, username)
+      def self.get_account_by_username(req, app, username)
         unless app.auth_account
           app.response.status = 401
           return { error: 'Authentication required' }
@@ -170,13 +170,23 @@ module SecureBidding
 
         authorized = SecureBidding::AuthorizeAccount.call(
           auth: app.authorization,
-          username: username
+          username: username,
+          auth_scope: req.params['scope']
         )
         account = Account.first(username: username)
-        app.account_response(account, policy: app.account_policy(account)).merge(api_key: authorized.token)
+        app.account_response(account, policy: app.account_policy(account)).merge(
+          api_key: authorized.token,
+          api_key_scope: authorized.scope.to_s
+        )
       rescue SecureBidding::AuthorizeAccount::ForbiddenError
         app.response.status = 404
         { error: 'Account not found' }
+      rescue SecureBidding::AuthorizeAccount::InvalidScopeError => e
+        app.response.status = 400
+        { error: e.message }
+      rescue SecureBidding::AuthorizeAccount::ScopeNotPermittedError => e
+        app.response.status = 403
+        { error: e.message }
       end
 
       def self.get_account(_req, app, id)

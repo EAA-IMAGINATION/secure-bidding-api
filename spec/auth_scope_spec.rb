@@ -23,6 +23,24 @@ describe SecureBidding::AuthScope do
     _(scope.can_read?('projects')).must_equal true
     _(scope.can_write?('projects')).must_equal true
   end
+
+  it 'allows only whitelisted API key scopes' do
+    _(SecureBidding::AuthScope.api_key_scope_allowed?('*:read')).must_equal true
+    _(SecureBidding::AuthScope.api_key_scope_allowed?('projects:write')).must_equal true
+    _(SecureBidding::AuthScope.api_key_scope_allowed?('admin:write')).must_equal false
+  end
+
+  it 'permits narrower scopes against a broader grantor' do
+    grantor = SecureBidding::AuthScope.new(SecureBidding::AuthScope::FULL)
+    requested = SecureBidding::AuthScope.new('projects:read')
+    _(requested.permitted_by?(grantor)).must_equal true
+  end
+
+  it 'rejects broader scopes against a narrower grantor' do
+    grantor = SecureBidding::AuthScope.new(SecureBidding::AuthScope::READ_ONLY)
+    requested = SecureBidding::AuthScope.new(SecureBidding::AuthScope::FULL)
+    _(requested.permitted_by?(grantor)).must_equal false
+  end
 end
 
 describe 'SecureBidding::AuthToken scoped tokens' do

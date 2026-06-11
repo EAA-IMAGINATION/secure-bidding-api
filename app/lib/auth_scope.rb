@@ -8,6 +8,13 @@ module SecureBidding
     WRITE = 'write'
     FULL = '*:write'
     READ_ONLY = '*:read'
+    API_KEY_SCOPES = [
+      READ_ONLY,
+      FULL,
+      'projects:read',
+      'projects:write',
+      'accounts:read'
+    ].freeze
 
     SEPARATOR = ' '
     DIVIDER = ':'
@@ -28,6 +35,24 @@ module SecureBidding
 
     def to_s
       @scopes_str
+    end
+
+    def self.api_key_scope_allowed?(scope_str)
+      API_KEY_SCOPES.include?(scope_str.to_s.strip)
+    end
+
+    # True when every permission in this scope is allowed by grantor.
+    def permitted_by?(grantor)
+      grantor = grantor.is_a?(AuthScope) ? grantor : AuthScope.new(grantor)
+      @scopes.all? do |resource, permissions|
+        permissions.all? do |permission|
+          case permission
+          when WRITE then grantor.can_write?(resource)
+          when READ then grantor.can_read?(resource)
+          else false
+          end
+        end
+      end
     end
 
     private

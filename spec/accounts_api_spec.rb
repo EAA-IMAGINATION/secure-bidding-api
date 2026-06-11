@@ -625,6 +625,69 @@ describe 'API /api/v1/accounts' do
     response_body = JSON.parse(last_response.body)
     _(response_body['profile_roles']).must_equal %w[member project_owner]
     _(response_body.key?('api_key')).must_equal true
+    _(response_body['api_key_scope']).must_equal '*:read'
+  end
+
+  it 'HAPPY: issues a customizable scoped API key when scope query param is provided' do
+    owner = SecureBidding::Account.new(username: 'scope-picker', system_role: 'member')
+    owner.set_password('my-secret-pass')
+    owner.set_email('scope-picker@example.com')
+    owner.verify_email!
+    owner.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: owner.id, username: owner.username, system_role: owner.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    get "/api/v1/accounts/#{owner.username}?scope=projects:read", {}, headers
+
+    _(last_response.status).must_equal 200
+    response_body = JSON.parse(last_response.body)
+    _(response_body['api_key_scope']).must_equal 'projects:read'
+
+    loaded = SecureBidding::AuthToken.load(response_body['api_key'])
+    _(loaded.scope.to_s).must_equal 'projects:read'
+  end
+
+  it 'SAD: rejects API key scopes that are not on the whitelist' do
+    owner = SecureBidding::Account.new(username: 'scope-invalid', system_role: 'member')
+    owner.set_password('my-secret-pass')
+    owner.set_email('scope-invalid@example.com')
+    owner.verify_email!
+    owner.save
+
+    token = SecureBidding::AuthToken.tokenize(
+      { account_id: owner.id, username: owner.username, system_role: owner.system_role },
+      SecureBidding::AuthToken::ONE_HOUR
+    )
+    headers = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    get "/api/v1/accounts/#{owner.username}?scope=admin:write", {}, headers
+
+    _(last_response.status).must_equal 400
+    _(JSON.parse(last_response.body)['error']).must_equal 'Scope is not allowed for API keys'
+  end
+
+  it 'SAD: rejects API key scopes broader than the session token' do
+    owner = SecureBidding::Account.new(username: 'scope-limited', system_role: 'member')
+    owner.set_password('my-secret-pass')
+    owner.set_email('scope-limited@example.com')
+    owner.verify_email!
+    owner.save
+
+    token = SecureBidding::AuthToken.new(
+      { account_id: owner.id, username: owner.username, system_role: owner.system_role },
+      SecureBidding::AuthToken::ONE_HOUR,
+      scope: SecureBidding::AuthScope.new(SecureBidding::AuthScope::READ_ONLY)
+    ).to_s
+    headers = { 'HTTP_AUTHORIZATION' => "Bearer #{token}" }
+
+    get "/api/v1/accounts/#{owner.username}?scope=*:write", {}, headers
+
+    _(last_response.status).must_equal 403
+    _(JSON.parse(last_response.body)['error']).must_equal 'Requested scope exceeds your session permissions'
   end
 
   it 'SAD: does not expose admin user creation routes' do
