@@ -5,7 +5,8 @@ namespace :accounts do
   task :ensure_platform_admin, [:username] do |_task, args|
     require_relative '../../app/require_app'
 
-    username = args[:username].presence || ENV.fetch('PLATFORM_ADMIN_USERNAME', 'scifiengineering')
+    username = args[:username].to_s.strip
+    username = ENV.fetch('PLATFORM_ADMIN_USERNAME', 'scifiengineering') if username.empty?
     result = SecureBidding::Services::Accounts::EnsurePlatformAdmin.call(platform_admin_username: username)
 
     unless result[:ok]
