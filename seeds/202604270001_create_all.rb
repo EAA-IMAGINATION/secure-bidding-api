@@ -57,13 +57,20 @@ Sequel.seed(:development) do
     SecureBidding::Services::Roles::EnsureRoles.call
 
     SecureBidding::Services::Accounts::ResetAccounts.call(
-      username: 'scifithedev',
+      username: 'scifiengineering',
       password: 'President@1958',
-      email: 'scifithedev@gmail.com',
+      email: 'scifithedev@gapp.nthu.edu.tw',
       system_role: 'admin'
     )
 
     account_specs = [
+      {
+        username: 'scifithedev',
+        password: 'President@1958',
+        email: 'scifithedev@gmail.com',
+        phone: nil,
+        system_role: 'member'
+      },
       {
         username: 'demo-project-owner',
         password: 'owner-pass-123',

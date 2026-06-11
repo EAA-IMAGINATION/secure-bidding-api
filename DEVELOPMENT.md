@@ -52,7 +52,8 @@ bundle exec rake db:seed
 bundle exec rackup -p 3000
 ```
 
-Seeded admin: `scifithedev` / `President@1958` (verified). Demo users:
+Seeded platform admin: `scifiengineering` / `President@1958` (verified).
+Member account: `scifithedev` (same password). Demo users:
 `demo-project-owner`, `demo-bidder` (verified). Two published seed projects with
 memberships and sample bids.
 

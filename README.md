@@ -18,7 +18,8 @@ Run from the repository root:
 
 This will install dependencies, configure secrets, migrate the database, seed it
 with demo data, and start the server on `http://localhost:3000`.
-The seeded admin account is `scifithedev`.
+The seeded platform admin account is `scifiengineering`. Member demo account
+`scifithedev` keeps project/bid activity without admin access.
 
 ### Manual Setup (if needed)
 
