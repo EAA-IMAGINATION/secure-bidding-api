@@ -2,16 +2,17 @@
 
 require 'json'
 require 'time'
-require 'rbnacl'
-require 'base64'
 
 require_relative 'auth_scope'
+require_relative 'securable'
 
 module SecureBidding
   class ExpiredTokenError < StandardError; end
   class InvalidTokenError < StandardError; end
 
   class AuthToken
+    extend Securable
+
     ONE_HOUR = 3600
     ONE_DAY = 86_400
     # Email verification links (registration, change-email, resend)
@@ -20,40 +21,20 @@ module SecureBidding
     ONE_MONTH = 2_592_000
     ONE_YEAR = 31_536_000
 
-    KEY_BYTES = 32
-
-    class << self
-      attr_accessor :auth_token_key
-    end
-
     def self.generate_key
-      random_bytes = RbNaCl::Random.random_bytes(KEY_BYTES)
-      Base64.strict_encode64(random_bytes)
+      Securable.generate_key
     end
 
     def self.setup(base_key)
-      return nil if base_key.nil?
-
-      self.auth_token_key = Base64.strict_decode64(base_key)
+      setup_secret_key(base_key)
     end
 
     def self.encrypt(plaintext)
-      raise NoKeyError, 'No secret key has been set up' if auth_token_key.nil?
-
-      plaintext_bytes = plaintext.to_s.b
-      cipher_box = RbNaCl::SimpleBox.from_secret_key(auth_token_key)
-      ciphertext = cipher_box.encrypt(plaintext_bytes)
-      Base64.strict_encode64(ciphertext)
+      base_encrypt(plaintext)
     end
 
     def self.decrypt(ciphertext64)
-      raise NoKeyError, 'No secret key has been set up' if auth_token_key.nil?
-      return nil if ciphertext64.nil?
-
-      ciphertext = Base64.strict_decode64(ciphertext64)
-      cipher_box = RbNaCl::SimpleBox.from_secret_key(auth_token_key)
-      plaintext_bytes = cipher_box.decrypt(ciphertext)
-      plaintext_bytes.force_encoding('UTF-8')
+      base_decrypt(ciphertext64)
     end
 
     def self.tokenize(message, expiration = ONE_WEEK, scope: nil)
